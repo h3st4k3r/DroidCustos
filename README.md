@@ -5,6 +5,11 @@
 | |_| |  _ <| |_| | || |_| |  | |___| |_| |___) || || |_| |___) |
 |____/|_| \_\\___/___|____/    \____|\___/|____/ |_| \___/|____/
 ```
+[![Status](https://img.shields.io/badge/status-public%20alpha-F59E0B)](./RELEASE_NOTES.md)
+[![License](https://img.shields.io/badge/license-see%20LICENSE-001538)](./LICENSE)
+[![Language](https://img.shields.io/badge/language-Python%203.10%2B-3776AB?logo=python&logoColor=white)](./pyproject.toml)
+[![Security](https://img.shields.io/badge/security-responsible%20disclosure-001538)](./SECURITY.md)
+[![Author](https://img.shields.io/badge/author-h3st4k3r-111827?logo=github&logoColor=white)](https://github.com/h3st4k3r)
 
 # DroidCustos
 
