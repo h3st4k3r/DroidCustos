@@ -1,4 +1,214 @@
-# DroidCustos custom IOC sources
+# DroidCustos explicit mobile STIX source catalogue
 # Author: h3st4k3r
-# Add only provenance-verified STIX2 URLs.
-additional_stix_urls: []
+#
+# Schema supported by DroidCustos 0.3.2:
+#
+#   sources:
+#     - name: Human-readable source name
+#       sources:
+#         - Provider
+#       references:
+#         - https://research-reference.example/
+#       github:
+#         owner: organisation
+#         repo: repository
+#         branch: main
+#         path: path/to/file.stix2
+#
+# This catalogue mirrors the public mobile-forensics sources indexed by
+# mvt-project/mvt-indicators as reviewed on 2026-08-03.
+#
+# IMPORTANT:
+# DroidCustos already clones the official MVT indicator index automatically.
+# Keep this file as an explicit catalogue, fallback or auditable source list.
+# Passing it together with the automatic index in DroidCustos 0.3.2 can
+# download duplicate bundles under different source records.
+#
+# Do not add unverified feeds merely to increase the indicator count.
+# Large generic feeds can create stale matches and false positives.
+
+sources:
+- name: NSO Group Pegasus Indicators of Compromise
+  sources:
+  - Amnesty International
+  references:
+  - https://www.amnesty.org/en/latest/research/2021/07/forensic-methodology-report-how-to-catch-nso-groups-pegasus/
+  github:
+    owner: AmnestyTech
+    repo: investigations
+    branch: master
+    path: 2021-07-18_nso/pegasus.stix2
+- name: Predator Spyware Indicators of Compromise
+  sources:
+  - Meta
+  - Amnesty International
+  - Citizen Lab
+  - Cisco
+  - Inside Story
+  - iVerify
+  references:
+  - https://citizenlab.ca/2021/12/pegasus-vs-predator-dissidents-doubly-infected-iphone-reveals-cytrox-mercenary-spyware/
+  - https://about.fb.com/news/2021/12/taking-action-against-surveillance-for-hire/
+  - https://blog.talosintelligence.com/mercenary-intellexa-predator/
+  - https://citizenlab.ca/2023/09/predator-in-the-wires-ahmed-eltantawy-targeted-with-predator-spyware-after-announcing-presidential-ambitions/
+  - https://insidestory.gr/article/predatorgate-ti-egrafan-ta-sms-pagida-poy-elavan-epiheirimaties-ypoyrgoi-kai-dimosiografoi
+  - https://iverify.io/blog/trust-broken-at-the-core
+  github:
+    owner: mvt-project
+    repo: mvt-indicators
+    branch: main
+    path: intellexa_predator/predator.stix2
+- name: RCS Lab Spyware Indicators of Compromise
+  sources:
+  - Google
+  - Lookout
+  references:
+  - https://blog.google/threat-analysis-group/italian-spyware-vendor-targets-users-in-italy-and-kazakhstan/
+  github:
+    owner: mvt-project
+    repo: mvt-indicators
+    branch: main
+    path: 2022-06-23_rcs_lab/rcs.stix2
+- name: Stalkerware Indicators of Compromise
+  sources:
+  - ECHAP
+  references:
+  - https://github.com/AssoEchap/stalkerware-indicators
+  github:
+    owner: AssoEchap
+    repo: stalkerware-indicators
+    branch: master
+    path: generated/stalkerware.stix2
+- name: Android surveillance campaign linked to mercenary spyware
+  sources:
+  - Amnesty International
+  - Google
+  references:
+  - https://blog.google/threat-analysis-group/spyware-vendors-use-0-days-and-n-days-against-popular-platforms/
+  - https://www.amnesty.org/en/latest/news/2023/03/new-android-hacking-campaign-linked-to-mercenary-spyware-company/
+  github:
+    owner: AmnestyTech
+    repo: investigations
+    branch: master
+    path: 2023-03-29_android_campaign/malware.stix2
+- name: Quadream KingSpawn Indicators of Compromise
+  sources:
+  - Citizen Lab
+  - Microsoft
+  references:
+  - https://citizenlab.ca/2023/04/spyware-vendor-quadream-exploits-victims-customers/
+  - https://www.microsoft.com/en-us/security/blog/2023/04/11/dev-0196-quadreams-kingspawn-malware-used-to-target-civil-society-in-europe-north-america-the-middle-east-and-southeast-asia/
+  github:
+    owner: mvt-project
+    repo: mvt-indicators
+    branch: main
+    path: 2023-04-11_quadream/kingspawn.stix2
+- name: Operation Triangulation Indicators of Compromise
+  sources:
+  - Kaspersky Lab
+  references:
+  - https://securelist.com/operation-triangulation/109842/
+  github:
+    owner: mvt-project
+    repo: mvt-indicators
+    branch: main
+    path: 2023-06_01_operation_triangulation/operation_triangulation.stix2
+- name: WyrmSpy and DragonEgg Indicators of Compromise
+  sources:
+  - Lookout
+  references:
+  - https://www.lookout.com/threat-intelligence/article/wyrmspy-dragonegg-surveillanceware-apt41
+  github:
+    owner: mvt-project
+    repo: mvt-indicators
+    branch: main
+    path: 2023-07-25_wyrmspy_dragonegg/wyrmspy_dragonegg.stix2
+- name: Wintego Helios Indicators of Compromise
+  sources:
+  - Amnesty International
+  references:
+  - https://securitylab.amnesty.org/latest/2024/05/a-web-of-surveillance/
+  github:
+    owner: AmnestyTech
+    repo: investigations
+    branch: master
+    path: 2024-05-02_wintego_helios/wintego_helios.stix2
+- name: NoviSpy Serbia Indicators of Compromise
+  sources:
+  - Amnesty International
+  references:
+  - https://securitylab.amnesty.org/latest/2024/12/serbia-a-digital-prison-spyware-and-cellebrite-used-on-journalists-and-activists/
+  github:
+    owner: AmnestyTech
+    repo: investigations
+    branch: master
+    path: 2024-12-16_serbia_novispy/novispy.stix2
+- name: Candiru DevilsTongue Indicators of Compromise
+  sources:
+  - Microsoft
+  - Recorded Future
+  references:
+  - https://www.microsoft.com/en-us/security/blog/2021/07/15/protecting-customers-from-a-private-sector-offensive-actor-using-0-day-exploits-and-devilstongue-malware/
+  - https://www.recordedfuture.com/research/tracking-candirus-devilstongue-spyware
+  github:
+    owner: mvt-project
+    repo: mvt-indicators
+    branch: main
+    path: candiru/candiru.stix2
+- name: ResidentBat Indicators of Compromise
+  sources:
+  - Reporters Without Borders
+  - RESIDENT.NGO
+  references:
+  - https://rsf.org/en/exclusive-rsf-uncovers-new-spyware-belarus
+  - https://rsf.org/sites/default/files/medias/file/2025/12/report.pdf
+  github:
+    owner: mvt-project
+    repo: mvt-indicators
+    branch: main
+    path: ResidentBat/residentbat.stix2
+- name: Cellebrite Indicators of Compromise
+  sources:
+  - Citizen Lab
+  references:
+  - https://citizenlab.ca/research/from-protest-to-peril-cellebrite-used-against-jordanian-civil-society/
+  github:
+    owner: mvt-project
+    repo: mvt-indicators
+    branch: main
+    path: cellebrite/cellebrite.stix2
+- name: DarkSword Indicators of Compromise
+  sources:
+  - Google Threat Intelligence Group
+  - iVerify
+  - Lookout
+  references:
+  - https://cloud.google.com/blog/topics/threat-intelligence/darksword-ios-exploit-chain
+  - https://iverify.io/blog/darksword-ios-exploit-kit-explained
+  github:
+    owner: mvt-project
+    repo: mvt-indicators
+    branch: main
+    path: 2026-03-30_darksword/darksword.stix2
+- name: Coruna Indicators of Compromise
+  sources:
+  - Google Threat Intelligence Group
+  - iVerify
+  references:
+  - https://cloud.google.com/blog/topics/threat-intelligence/coruna-powerful-ios-exploit-kit?hl=en
+  - https://iverify.io/blog/coruna-inside-the-nation-state-grade-ios-exploit-kit-we-ve-been-tracking
+  github:
+    owner: mvt-project
+    repo: mvt-indicators
+    branch: main
+    path: 2026-03-03_coruna_cryptowaters/coruna.stix2
+- name: Morpheus Indicators of Compromise
+  sources:
+  - Osservatorio Nessuno
+  references:
+  - https://osservatorionessuno.org/blog/2026/04/morpheus-a-new-spyware-linked-to-ips-intelligence
+  github:
+    owner: mvt-project
+    repo: mvt-indicators
+    branch: main
+    path: 2026-04-23_ips_morpheus/morpheus.stix2
