@@ -1,0 +1,12 @@
+id: vivo
+manufacturers: ["vivo"]
+defaults:
+  sdk_min: 26
+  privilege: shell
+  timeout: 240
+  sensitivity: system
+collectors:
+  - id: vivo-properties
+    description: Vivo and iQOO platform properties
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "getprop | grep -Ei 'vivo|iqoo|funtouch|originos|security_patch' || true"]
+    output: "vivo-properties.txt"

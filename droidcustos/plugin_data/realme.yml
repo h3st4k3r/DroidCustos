@@ -1,0 +1,12 @@
+id: realme
+manufacturers: ["realme"]
+defaults:
+  sdk_min: 26
+  privilege: shell
+  timeout: 240
+  sensitivity: system
+collectors:
+  - id: realme-properties
+    description: Realme UI and OPlus properties
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "getprop | grep -Ei 'realme|oplus|coloros|security_patch' || true"]
+    output: "realme-properties.txt"

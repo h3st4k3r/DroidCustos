@@ -1,0 +1,20 @@
+id: xiaomi
+manufacturers: ["xiaomi"]
+defaults:
+  sdk_min: 26
+  privilege: shell
+  timeout: 240
+  sensitivity: system
+collectors:
+  - id: hyperos-properties
+    description: MIUI and HyperOS properties
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "getprop | grep -Ei 'miui|hyperos|xiaomi|region|security_patch' || true"]
+    output: "hyperos-properties.txt"
+  - id: second-space
+    description: Xiaomi second-space and cloned-app metadata
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "pm list users; settings list secure | grep -Ei 'second|clone|dual' || true"]
+    output: "second-space.txt"
+  - id: security-center
+    description: Xiaomi Security Center package metadata
+    command: ["{adb}", "-s", "{serial}", "shell", "dumpsys", "package", "com.miui.securitycenter"]
+    output: "security-center-package.txt"

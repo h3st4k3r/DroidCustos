@@ -1,0 +1,20 @@
+id: asus
+manufacturers: ["asus"]
+defaults:
+  sdk_min: 26
+  privilege: shell
+  timeout: 240
+  sensitivity: system
+collectors:
+  - id: rog-properties
+    description: ASUS and ROG platform properties
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "getprop | grep -Ei 'asus|rog|game|armoury|security_patch|verifiedboot' || true"]
+    output: "rog-properties.txt"
+  - id: armoury-package
+    description: Armoury Crate package metadata
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "dumpsys package com.asus.gamecenter 2>/dev/null || true"]
+    output: "armoury-package.txt"
+  - id: asus-autostart
+    description: ASUS background and autostart policy state
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "settings list global | grep -Ei 'autostart|background|asus' || true"]
+    output: "asus-autostart.txt"

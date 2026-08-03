@@ -1,0 +1,17 @@
+Source: droidcustos
+Section: utils
+Priority: optional
+Maintainer: h3st4k3r
+Build-Depends: debhelper-compat (= 13), dh-python, pybuild-plugin-pyproject, python3-all, python3-setuptools
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+Homepage: https://github.com/h3st4k3r/DroidCustos
+
+Package: droidcustos
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends}, adb, git, python3-yaml, python3-cryptography
+Recommends: android-sdk-build-tools, python3-venv
+Description: universal Android forensic acquisition orchestrator
+ DroidCustos coordinates capability discovery, AndroidQF, ADB diagnostics,
+ MVT, optional ALEAPP analysis, IOC normalization, package baselines,
+ evidence preservation, reporting and cryptographic case controls.

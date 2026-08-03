@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "droidcustos"
+version = "0.3.2"
+description = "Universal Android forensic acquisition, evidence preservation, threat hunting and IOC correlation orchestrator."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GPL-3.0-or-later" }
+authors = [
+  { name = "h3st4k3r" }
+]
+keywords = ["android", "forensics", "dfir", "incident-response", "threat-hunting", "stix"]
+
+dependencies = [
+  "PyYAML>=6.0",
+  "cryptography>=42.0"
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Information Technology",
+  "Intended Audience :: Legal Industry",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: Security",
+  "Topic :: System :: Logging",
+  "Topic :: Utilities"
+]
+
+[project.scripts]
+droidcustos = "droidcustos.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["droidcustos*"]
+
+[tool.setuptools.package-data]
+droidcustos = ["plugin_data/*.yml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

@@ -1,0 +1,16 @@
+id: google
+manufacturers: ["google"]
+defaults:
+  sdk_min: 29
+  privilege: shell
+  timeout: 180
+  sensitivity: system
+collectors:
+  - id: pixel-security-state
+    description: Pixel security and update properties
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "getprop | grep -Ei 'security_patch|verifiedboot|vbmeta|boot.flash|apex' || true"]
+    output: "pixel-security-state.txt"
+  - id: pixel-incident-services
+    description: Pixel security-related binder services
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "service list | grep -Ei 'security|incident|intrusion|stats' || true"]
+    output: "pixel-incident-services.txt"

@@ -1,0 +1,12 @@
+id: motorola
+manufacturers: ["motorola"]
+defaults:
+  sdk_min: 26
+  privilege: shell
+  timeout: 240
+  sensitivity: system
+collectors:
+  - id: motorola-properties
+    description: Motorola platform and update properties
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "getprop | grep -Ei 'motorola|moto|retail|security_patch|verifiedboot' || true"]
+    output: "motorola-properties.txt"

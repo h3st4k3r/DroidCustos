@@ -1,0 +1,16 @@
+id: oneplus
+manufacturers: ["oneplus"]
+defaults:
+  sdk_min: 26
+  privilege: shell
+  timeout: 240
+  sensitivity: system
+collectors:
+  - id: oxygen-properties
+    description: OxygenOS properties
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "getprop | grep -Ei 'oneplus|oxygen|oplus|security_patch' || true"]
+    output: "oxygen-properties.txt"
+  - id: parallel-apps
+    description: OnePlus parallel-app and clone metadata
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "pm list users; settings list secure | grep -Ei 'parallel|clone' || true"]
+    output: "parallel-apps.txt"

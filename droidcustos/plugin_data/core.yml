@@ -1,0 +1,48 @@
+id: core
+manufacturers: ["*"]
+defaults:
+  sdk_min: 26
+  privilege: shell
+  timeout: 180
+  sensitivity: system
+collectors:
+  - id: users
+    description: Android users and profiles
+    command: ["{adb}", "-s", "{serial}", "shell", "pm", "list", "users"]
+    output: "users.txt"
+  - id: storage-volumes
+    description: Storage-manager volume inventory
+    command: ["{adb}", "-s", "{serial}", "shell", "sm", "list-volumes", "all"]
+    output: "storage-volumes.txt"
+  - id: mounted-filesystems
+    description: Mounted filesystem state
+    command: ["{adb}", "-s", "{serial}", "shell", "mount"]
+    output: "mount.txt"
+  - id: package-user
+    description: Installed packages for each visible Android user
+    command: ["{adb}", "-s", "{serial}", "shell", "pm", "list", "packages", "-f", "-i", "-U", "-u", "--user", "{user}"]
+    output: "packages-user-{user}.txt"
+  - id: settings-secure-user
+    description: Secure settings for each visible Android user
+    command: ["{adb}", "-s", "{serial}", "shell", "settings", "--user", "{user}", "list", "secure"]
+    output: "settings-secure-user-{user}.txt"
+  - id: settings-system-user
+    description: System settings for each visible Android user
+    command: ["{adb}", "-s", "{serial}", "shell", "settings", "--user", "{user}", "list", "system"]
+    output: "settings-system-user-{user}.txt"
+  - id: dropbox
+    description: Android DropBox diagnostic records
+    required_dumpsys: ["dropbox"]
+    command: ["{adb}", "-s", "{serial}", "shell", "dumpsys", "dropbox", "--print"]
+    output: "dropbox.txt"
+    timeout: 600
+  - id: device-policy
+    description: Device and profile policy state
+    required_dumpsys: ["device_policy"]
+    command: ["{adb}", "-s", "{serial}", "shell", "dumpsys", "device_policy"]
+    output: "device-policy.txt"
+  - id: role
+    description: Android role holders
+    required_dumpsys: ["role"]
+    command: ["{adb}", "-s", "{serial}", "shell", "dumpsys", "role"]
+    output: "roles.txt"

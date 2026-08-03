@@ -1,0 +1,20 @@
+id: samsung
+manufacturers: ["samsung"]
+defaults:
+  sdk_min: 26
+  privilege: shell
+  timeout: 240
+  sensitivity: system
+collectors:
+  - id: knox-state
+    description: Samsung Knox and warranty state properties
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "getprop | grep -Ei 'knox|warranty|secureboot|vaultkeeper' || true"]
+    output: "knox-state.txt"
+  - id: dual-app-state
+    description: Samsung dual application and profile metadata
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "dumpsys package | grep -Ei 'dual|securefolder|knox' || true"]
+    output: "dual-app-state.txt"
+  - id: samsung-browser
+    description: Samsung Internet package metadata
+    command: ["{adb}", "-s", "{serial}", "shell", "dumpsys", "package", "com.sec.android.app.sbrowser"]
+    output: "samsung-browser-package.txt"

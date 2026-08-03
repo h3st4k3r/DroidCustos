@@ -1,0 +1,16 @@
+id: huawei
+manufacturers: ["huawei"]
+defaults:
+  sdk_min: 26
+  privilege: shell
+  timeout: 240
+  sensitivity: system
+collectors:
+  - id: huawei-properties
+    description: Huawei, EMUI and HarmonyOS properties
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "getprop | grep -Ei 'huawei|emui|harmony|security_patch|verifiedboot' || true"]
+    output: "huawei-properties.txt"
+  - id: twin-apps
+    description: Huawei twin-app and user metadata
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "pm list users; settings list secure | grep -Ei 'twin|clone' || true"]
+    output: "twin-apps.txt"

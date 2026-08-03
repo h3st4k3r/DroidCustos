@@ -1,0 +1,16 @@
+id: oppo
+manufacturers: ["oppo"]
+defaults:
+  sdk_min: 26
+  privilege: shell
+  timeout: 240
+  sensitivity: system
+collectors:
+  - id: coloros-properties
+    description: ColorOS and OPlus properties
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "getprop | grep -Ei 'oppo|oplus|coloros|security_patch' || true"]
+    output: "coloros-properties.txt"
+  - id: app-cloner
+    description: ColorOS application-cloner metadata
+    command: ["{adb}", "-s", "{serial}", "shell", "sh", "-c", "pm list users; settings list secure | grep -Ei 'clone|multiapp' || true"]
+    output: "app-cloner.txt"
