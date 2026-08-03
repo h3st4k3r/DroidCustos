@@ -11,6 +11,8 @@
 [![Security](https://img.shields.io/badge/security-responsible%20disclosure-001538)](./SECURITY.md)
 [![Author](https://img.shields.io/badge/author-h3st4k3r-111827?logo=github&logoColor=white)](https://github.com/h3st4k3r)
 
+<img width="1566" height="909" alt="output-report-html-sample" src="https://github.com/user-attachments/assets/37dcfc22-590c-4239-8079-3ad33a489cb8" />
+
 # DroidCustos
 
 **Android forensic acquisition, evidence preservation, threat hunting and IOC correlation.**
@@ -23,6 +25,8 @@
 - **Target platform:** Android 8 and later, capability-dependent
 
 DroidCustos is a command-line orchestrator for authorized Android forensic triage. It combines capability discovery, AndroidQF acquisition, ADB diagnostics, MVT analysis, optional ALEAPP parsing, OEM-aware collectors, package inventory, STIX threat intelligence, unified timelines, integrity manifests, signed case seals and encrypted case exports.
+
+<img width="842" height="207" alt="output-sample" src="https://github.com/user-attachments/assets/4db2aa4d-8938-4384-9535-14478cbb4c14" />
 
 The project is intended to make repeatable mobile-forensic triage accessible to investigators who need transparent evidence handling and readable reports without hiding the underlying artifacts.
 
