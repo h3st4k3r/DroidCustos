@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Iterable
 from urllib.parse import urlparse
 
+from .datetime_utils import parse_iso8601
 from .ioc_matcher import IOCExpression, load_database_expressions, match_expressions
 
 
@@ -87,13 +88,11 @@ def _normalize_timestamp(value: object) -> str:
         "%Y-%m-%dT%H:%M:%S.%f",
         "%Y/%m/%d %H:%M:%S",
     )
-    try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    parsed = parse_iso8601(text)
+    if parsed is not None:
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=timezone.utc)
         return parsed.astimezone(timezone.utc).isoformat()
-    except ValueError:
-        pass
     for pattern in formats:
         try:
             return datetime.strptime(text, pattern).replace(tzinfo=timezone.utc).isoformat()

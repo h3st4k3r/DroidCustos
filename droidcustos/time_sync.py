@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .commands import run_capture
+from .datetime_utils import parse_iso8601
 
 
 def _parse_device_time(value: str) -> datetime | None:
@@ -14,9 +15,8 @@ def _parse_device_time(value: str) -> datetime | None:
     text = str(value or "").strip()
     if not text:
         return None
-    try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
+    parsed = parse_iso8601(text)
+    if parsed is None:
         return None
     return parsed.replace(tzinfo=parsed.tzinfo or timezone.utc).astimezone(timezone.utc)
 
