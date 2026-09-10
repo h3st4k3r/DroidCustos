@@ -1,0 +1,82 @@
+name: Continuous integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install development dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+
+      - name: Compile source
+        run: python -m compileall -q droidcustos tests
+
+      - name: Run tests
+        run: python -m pytest
+
+  wheel:
+    name: Build and install wheel
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install build tooling
+        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+
+      - name: Build wheel
+        run: python -m build --wheel --no-isolation
+
+      - name: Install wheel in a clean virtual environment
+        run: |
+          python -m venv .wheel-venv
+          .wheel-venv/bin/python -m pip install --disable-pip-version-check --upgrade pip
+          .wheel-venv/bin/python -m pip install dist/*.whl
+
+      - name: Smoke test installed wheel
+        run: |
+          .wheel-venv/bin/droidcustos --help
+          .wheel-venv/bin/python -c 'import droidcustos; print(droidcustos.__version__)'
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v6
+        with:
+          name: droidcustos-wheel
+          if-no-files-found: error
+          path: dist/*.whl

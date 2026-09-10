@@ -64,6 +64,7 @@ def calculate_verdict(
         or not mvt.command_success
         or ioc_count == 0
         or coverage_score < 60.0
+        or bool(coverage and coverage.missing_critical_sources)
     )
     if incomplete:
         if not integrity_verified:
@@ -76,6 +77,8 @@ def calculate_verdict(
             reasons.append("No STIX2 indicator files were available")
         if coverage_score < 60.0:
             reasons.append(f"Acquisition coverage was below the minimum threshold: {coverage_score:.2f}%")
+        if coverage and coverage.missing_critical_sources:
+            reasons.append("Critical evidence sources missing: " + ", ".join(coverage.missing_critical_sources))
         if review_findings:
             reasons.extend(f"{item.severity.upper()}: {item.title}" for item in review_findings[:15])
             return Verdict(

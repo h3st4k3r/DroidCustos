@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import json
 import shutil
-import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .archive_safety import safe_extract_zip
 from .capabilities import DeviceCapabilities
 from .case import CasePaths
 from .commands import run_stream, run_to_files
@@ -226,14 +226,7 @@ def collect_adb_extras(
 
 def _safe_extract(archive: Path, destination: Path) -> None:
     """Extract an AndroidQF ZIP without path traversal."""
-    destination.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(archive) as package:
-        base = destination.resolve()
-        for member in package.infolist():
-            target = (destination / member.filename).resolve()
-            if base not in target.parents and target != base:
-                raise RuntimeError(f"Unsafe ZIP member in {archive}: {member.filename}")
-        package.extractall(destination)
+    safe_extract_zip(archive, destination)
 
 
 def prepare_working_copy(case: CasePaths) -> list[Path]:

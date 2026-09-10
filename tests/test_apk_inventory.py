@@ -1,4 +1,4 @@
-from droidcustos.apk_inventory import compare_inventories, parse_package_list
+from droidcustos.apk_inventory import _parse_apksigner, compare_inventories, parse_package_list
 
 
 def test_package_list_parser():
@@ -18,3 +18,15 @@ def test_inventory_diff():
     current = {"records": [{"package": "a", "user_id": 0, "version_code": "2"}, {"package": "b", "user_id": 0}]}
     result = compare_inventories(base, current)
     assert result["summary"] == {"added": 1, "removed": 0, "changed": 1}
+
+
+def test_apksigner_keeps_current_and_lineage_certificates_separate():
+    """Preserve current signing certificates while retaining rotated lineage."""
+    current = "a" * 64
+    old = "b" * 64
+    parsed_current, parsed_history = _parse_apksigner(
+        f"Signer #1 certificate SHA-256 digest: {current}\n"
+        f"Signer #1 certificate SHA-256 lineage: {old}\n"
+    )
+    assert parsed_current == [current]
+    assert parsed_history == sorted([current, old])

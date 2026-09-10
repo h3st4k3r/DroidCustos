@@ -12,7 +12,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from .hashing import sha256_file
-from .indicators import iter_indicator_records
+from .ioc_matcher import IOCExpression, load_stix_expressions, match_expressions
 
 
 @dataclass(frozen=True)
@@ -91,15 +91,25 @@ def analyze_device_metadata(metadata: dict[str, object]) -> list[Finding]:
     return findings
 
 
-def _ioc_sets(ioc_files: list[Path]) -> dict[str, set[str]]:
-    """Build active package, certificate and hash IOC sets."""
-    values: dict[str, set[str]] = {"package": set(), "sha256": set(), "certificate-sha256": set()}
-    for record in iter_indicator_records(ioc_files):
-        if record.revoked:
-            continue
-        if record.normalized_type in values:
-            values[record.normalized_type].add(record.value.lower())
-    return values
+def _ioc_expressions(ioc_files: list[Path]) -> list[IOCExpression]:
+    """Load complete active-capable STIX expressions for heuristic scopes."""
+    return load_stix_expressions(ioc_files)
+
+
+def _ioc_findings(matches: list[dict[str, object]], evidence: str) -> list[Finding]:
+    """Convert complete STIX expression matches into confirmed findings."""
+    findings: list[Finding] = []
+    for match in matches:
+        findings.append(
+            Finding(
+                "critical",
+                "ioc",
+                "Complete STIX expression matches published IOC evidence",
+                f"{evidence}: {match.get('pattern', '')}",
+                100,
+            )
+        )
+    return findings
 
 
 def analyze_packages(packages_file: Path, ioc_files: list[Path]) -> list[Finding]:
@@ -111,9 +121,9 @@ def analyze_packages(packages_file: Path, ioc_files: list[Path]) -> list[Finding
         lowered = package.lower()
         if any(token in lowered for token in ROOT_PACKAGE_TOKENS):
             findings.append(Finding("high", "package", "Root or instrumentation package detected", package, 50))
-    iocs = _ioc_sets(ioc_files)
-    for package in sorted({value.lower() for value in packages} & iocs["package"]):
-        findings.append(Finding("critical", "ioc", "Package identifier matches a published IOC", package, 100))
+    expressions = _ioc_expressions(ioc_files)
+    for package in sorted(packages):
+        findings.extend(_ioc_findings(match_expressions({"package": [package]}, expressions), package))
     return findings
 
 
@@ -122,7 +132,7 @@ def analyze_package_inventory(inventory_path: Path, ioc_files: list[Path]) -> li
     if not inventory_path.is_file():
         return []
     payload = json.loads(inventory_path.read_text(encoding="utf-8"))
-    iocs = _ioc_sets(ioc_files)
+    expressions = _ioc_expressions(ioc_files)
     findings: list[Finding] = []
     for record in payload.get("records", []):
         package = str(record.get("package", ""))
@@ -130,14 +140,12 @@ def analyze_package_inventory(inventory_path: Path, ioc_files: list[Path]) -> li
         permissions = set(str(value) for value in record.get("requested_permissions", []))
         certificates = {str(value).lower() for value in record.get("signing_certificates_sha256", [])}
         local_apks = record.get("local_apks", [])
-        if package.lower() in iocs["package"]:
-            findings.append(Finding("critical", "ioc", "Package identifier matches a published IOC", package, 100))
-        for certificate in sorted(certificates & iocs["certificate-sha256"]):
-            findings.append(Finding("critical", "ioc", "APK signing certificate matches a published IOC", f"{package} {certificate}", 100))
-        for item in local_apks:
-            digest = str(item.get("sha256", "")).lower()
-            if digest in iocs["sha256"]:
-                findings.append(Finding("critical", "ioc", "APK SHA-256 matches a published IOC", f"{package} {digest}", 100))
+        evidence = {
+            "package": [package],
+            "certificate-sha256": certificates,
+            "sha256": [str(item.get("sha256", "")) for item in local_apks],
+        }
+        findings.extend(_ioc_findings(match_expressions(evidence, expressions), package))
         risky = permissions & HIGH_RISK_PERMISSIONS
         if len(risky) >= 5 and installer in {"", "null", "com.android.shell"}:
             findings.append(
@@ -155,13 +163,12 @@ def analyze_package_inventory(inventory_path: Path, ioc_files: list[Path]) -> li
 def analyze_apk_hashes(working: Path, ioc_files: list[Path], output: Path) -> list[Finding]:
     """Hash acquired APKs and match active SHA-256 indicators."""
     findings: list[Finding] = []
-    expected = _ioc_sets(ioc_files)["sha256"]
+    expressions = _ioc_expressions(ioc_files)
     rows: list[dict[str, str]] = []
     for apk in sorted(working.rglob("*.apk")):
         digest = sha256_file(apk)
         rows.append({"path": str(apk), "sha256": digest})
-        if digest.lower() in expected:
-            findings.append(Finding("critical", "ioc", "APK SHA-256 matches a published IOC", f"{digest} {apk}", 100))
+        findings.extend(_ioc_findings(match_expressions({"sha256": [digest]}, expressions), f"{digest} {apk}"))
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
     return findings

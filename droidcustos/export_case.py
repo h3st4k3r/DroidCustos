@@ -18,6 +18,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+from .archive_safety import safe_extract_tar
 from .hashing import sha256_file
 
 
@@ -78,16 +79,6 @@ def export_encrypted_case(case_root: Path, destination: Path, password: bytes) -
     return destination
 
 
-def _safe_extract(archive: tarfile.TarFile, destination: Path) -> None:
-    """Extract a case archive without path traversal."""
-    root = destination.resolve()
-    for member in archive.getmembers():
-        target = (destination / member.name).resolve()
-        if root not in target.parents and target != root:
-            raise RuntimeError(f"Unsafe archive member: {member.name}")
-    archive.extractall(destination, filter="data")
-
-
 def import_encrypted_case(source: Path, destination: Path, password: bytes) -> Path:
     """Decrypt, authenticate and extract a DroidCustos case export."""
     with source.open("rb") as handle:
@@ -116,8 +107,7 @@ def import_encrypted_case(source: Path, destination: Path, password: bytes) -> P
             output.write(decryptor.finalize())
         if sha256_file(tar_path) != header["plaintext_sha256"]:
             raise RuntimeError("Decrypted export hash verification failed")
-        with tarfile.open(tar_path, "r:gz") as archive:
-            _safe_extract(archive, destination)
+        safe_extract_tar(tar_path, destination)
     finally:
         tar_path.unlink(missing_ok=True)
     return destination / str(header["case_name"])

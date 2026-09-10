@@ -459,6 +459,7 @@ def generate_reports(
     package_inventory: dict[str, object],
     aleapp: AleappSummary,
     timeline: dict[str, object],
+    security_state: dict[str, object] | None = None,
 ) -> tuple[Path, Path, Path]:
     """Generate complete machine-readable and analyst-readable reports."""
     reports_dir.mkdir(parents=True, exist_ok=True)
@@ -498,6 +499,7 @@ def generate_reports(
             "users": package_inventory.get("users", []),
         },
         "extended_analysis": asdict(extended),
+        "security_state": security_state or {},
         "heuristic_findings": [asdict(item) for item in findings],
         "ioc_manifest": ioc_manifest,
         "report_tables": report_tables,
@@ -537,6 +539,7 @@ def generate_reports(
                 ["Coverage", f"{coverage.coverage_score}%"],
                 ["Evidence integrity", "Verified" if integrity.get("verified") else "Not verified"],
                 ["AndroidQF acquisition", "Complete" if acquisition.get("complete") else "Incomplete"],
+                ["Security posture score", (security_state or {}).get("risk_score", "Not calculated")],
             ],
         ),
         "",
@@ -569,6 +572,16 @@ def generate_reports(
         "## DroidCustos Findings",
         "",
         *_markdown_table(tables["findings"]["headers"], tables["findings"]["rows"], 100),
+        "",
+        "## Evidence-Based Security State",
+        "",
+        *_markdown_table(
+            ["Signal", "Severity", "Detail", "Score"],
+            [
+                [item.get("signal", ""), item.get("severity", ""), item.get("detail", ""), item.get("score", "")]
+                for item in (security_state or {}).get("findings", [])
+            ],
+        ),
         "",
         "## Package Inventory Summary",
         "",

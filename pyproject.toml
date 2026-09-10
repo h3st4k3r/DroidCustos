@@ -8,7 +8,7 @@ version = "0.3.2"
 description = "Universal Android forensic acquisition, evidence preservation, threat hunting and IOC correlation orchestrator."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "GPL-3.0-or-later" }
+license = "GPL-3.0-or-later"
 authors = [
   { name = "h3st4k3r" }
 ]
@@ -25,7 +25,6 @@ classifiers = [
   "Intended Audience :: Legal Industry",
   "Intended Audience :: Science/Research",
   "Intended Audience :: System Administrators",
-  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
   "Operating System :: MacOS",
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3",

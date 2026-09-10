@@ -11,15 +11,14 @@ import os
 import platform
 import shutil
 import stat
-import tarfile
 import tempfile
 import urllib.request
 import venv
-import zipfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from . import __version__
+from .archive_safety import safe_extract_tar, safe_extract_zip
 from .commands import run_capture
 
 
@@ -154,21 +153,9 @@ def _extract_androidqf(archive: Path, target_dir: Path) -> Path:
     extract_dir.mkdir(parents=True)
     lowered = archive.name.lower()
     if lowered.endswith(".zip"):
-        with zipfile.ZipFile(archive) as package:
-            base = extract_dir.resolve()
-            for member in package.infolist():
-                target = (extract_dir / member.filename).resolve()
-                if base not in target.parents and target != base:
-                    raise RuntimeError(f"Unsafe AndroidQF release ZIP member: {member.filename}")
-            package.extractall(extract_dir)
+        safe_extract_zip(archive, extract_dir)
     elif lowered.endswith((".tar.gz", ".tgz", ".tar")):
-        with tarfile.open(archive, "r:*") as package:
-            base = extract_dir.resolve()
-            for member in package.getmembers():
-                target = (extract_dir / member.name).resolve()
-                if base not in target.parents and target != base:
-                    raise RuntimeError(f"Unsafe AndroidQF release TAR member: {member.name}")
-            package.extractall(extract_dir)
+        safe_extract_tar(archive, extract_dir)
     else:
         candidate = extract_dir / "androidqf"
         shutil.copy2(archive, candidate)
