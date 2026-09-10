@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Iterable, Mapping
 from urllib.parse import urlsplit, urlunsplit
 
+from .datetime_utils import parse_iso8601
+
 
 _ATOM_RE = re.compile(
     r"(?P<object>[A-Za-z0-9_-]+):(?P<field>[A-Za-z0-9_.\-'\[\]]+)\s*=\s*"
@@ -253,9 +255,8 @@ def is_active(
     for raw, lower_bound in ((valid_from, True), (valid_until, False)):
         if not raw:
             continue
-        try:
-            timestamp = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-        except ValueError:
+        timestamp = parse_iso8601(raw)
+        if timestamp is None:
             continue
         if timestamp.tzinfo is None:
             timestamp = timestamp.replace(tzinfo=timezone.utc)

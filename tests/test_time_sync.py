@@ -1,7 +1,15 @@
 from unittest.mock import patch
 
 from droidcustos.commands import CommandResult
+from droidcustos.datetime_utils import parse_iso8601
 from droidcustos.time_sync import measure_time_sync
+
+
+def test_parse_iso8601_truncates_android_nanoseconds() -> None:
+    """Keep microsecond precision when Android emits nine fractional digits."""
+    parsed = parse_iso8601("2026-09-10T10:00:00.123456789Z")
+    assert parsed is not None
+    assert parsed.isoformat() == "2026-09-10T10:00:00.123456+00:00"
 
 
 def test_time_sync_records_offset_and_uncertainty() -> None:
