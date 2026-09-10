@@ -135,8 +135,8 @@ def _parse_dumpsys(record: PackageRecord, text: str) -> None:
 def _parse_apksigner(text: str) -> tuple[list[str], list[str]]:
     """Parse certificate digests from apksigner output."""
     current = re.findall(r"Signer #\d+ certificate SHA-256 digest: ([A-Fa-f0-9]+)", text)
-    history = re.findall(r"Signer #\d+ certificate SHA-256 digest: ([A-Fa-f0-9]+)", text)
-    return sorted({value.lower() for value in current}), sorted({value.lower() for value in history})
+    lineage = re.findall(r"Signer #\d+ certificate SHA-256 lineage: ([A-Fa-f0-9]+)", text)
+    return sorted({value.lower() for value in current}), sorted({value.lower() for value in [*current, *lineage]})
 
 
 def _parse_aapt_package(text: str) -> str | None:

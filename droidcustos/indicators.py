@@ -5,6 +5,7 @@ Author: h3st4k3r
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import re
@@ -20,6 +21,7 @@ import yaml
 
 from . import __version__
 from .commands import run_capture
+from .ioc_matcher import is_active, normalize_type
 
 
 INDEX_REPOSITORY = "https://github.com/mvt-project/mvt-indicators.git"
@@ -184,33 +186,15 @@ def stix_files(output_dir: Path) -> list[Path]:
 
 def _normalized_type(object_type: str, field: str) -> str:
     """Map STIX object fields to operational observable types."""
-    key = f"{object_type}:{field}".lower().replace("'", "")
-    if key.startswith("domain-name:value"):
-        return "domain"
-    if key.startswith("ipv4-addr:value"):
-        return "ipv4"
-    if key.startswith("ipv6-addr:value"):
-        return "ipv6"
-    if key.startswith("url:value"):
-        return "url"
-    if key.startswith("file:hashes") and "sha-256" in key:
-        return "sha256"
-    if key.startswith("file:name"):
-        return "filename"
-    if key.startswith("process:name"):
-        return "process"
-    if key.startswith("x509-certificate:hashes") and "sha-256" in key:
-        return "certificate-sha256"
-    if key.startswith("android-app:package") or key.startswith("software:name"):
-        return "package"
-    return key
+    return normalize_type(object_type, field)
 
 
 def parse_stix_pattern(pattern: str) -> list[tuple[str, str, str]]:
     """Extract equality observables from compound STIX patterns."""
     atoms: list[tuple[str, str, str]] = []
     for match in _ATOM_RE.finditer(pattern):
-        value = bytes(match.group("value"), "utf-8").decode("unicode_escape")
+        literal = match.group("quote") + match.group("value") + match.group("quote")
+        value = str(ast.literal_eval(literal))
         atoms.append((match.group("object"), match.group("field"), value))
     return atoms
 
@@ -388,24 +372,16 @@ def build_ioc_database(paths: Iterable[Path], database: Path, manifest: dict[str
     return database
 
 
-def _is_active(valid_until: str | None, revoked: bool, now: datetime | None = None) -> bool:
+def _is_active(valid_from: str | None, valid_until: str | None, revoked: bool, now: datetime | None = None) -> bool:
     """Evaluate whether an indicator remains operationally active."""
-    if revoked:
-        return False
-    if not valid_until:
-        return True
-    try:
-        value = datetime.fromisoformat(valid_until.replace("Z", "+00:00"))
-        return value >= (now or datetime.now(timezone.utc))
-    except ValueError:
-        return True
+    return is_active(valid_from, valid_until, revoked, now)
 
 
 def extract_simple_indicators(paths: Iterable[Path]) -> dict[str, set[str]]:
     """Return compatibility sets for existing analyzers."""
     values: dict[str, set[str]] = {}
     for record in iter_indicator_records(paths):
-        if not _is_active(record.valid_until, record.revoked):
+        if not _is_active(record.valid_from, record.valid_until, record.revoked):
             continue
         key = f"{record.object_type}:{record.field}"
         values.setdefault(key, set()).add(record.value)
@@ -420,10 +396,10 @@ def load_ioc_lookup(database: Path) -> dict[str, set[str]]:
     connection = sqlite3.connect(database)
     try:
         rows = connection.execute(
-            "SELECT normalized_type, value, valid_until, revoked FROM indicators"
+            "SELECT normalized_type, value, valid_from, valid_until, revoked FROM indicators"
         ).fetchall()
-        for indicator_type, value, valid_until, revoked in rows:
-            if _is_active(valid_until, bool(revoked)):
+        for indicator_type, value, valid_from, valid_until, revoked in rows:
+            if _is_active(valid_from, valid_until, bool(revoked)):
                 lookup.setdefault(str(indicator_type), set()).add(str(value))
     finally:
         connection.close()

@@ -14,6 +14,7 @@ from . import __version__
 from .acquisition import collect_adb_extras, collect_volatile_state, prepare_working_copy, run_androidqf
 from .aleapp import AleappSummary, run_aleapp
 from .analysis import run_mvt
+from .apk_analysis import analyze_apk_tree
 from .apk_inventory import collect_package_inventory, enrich_inventory_with_local_apks
 from .capabilities import build_acquisition_plan, discover_capabilities
 from .case import CasePaths
@@ -24,11 +25,12 @@ from .device import collect_device_metadata, select_device
 from .extended_acquisition import collect_extended_artifacts
 from .extended_analysis import analyze_extended
 from .hashing import create_evidence_manifest, seal_read_only, verify_evidence_manifest
-from .heuristics import run_heuristics
+from .heuristics import Finding, run_heuristics
 from .indicators import build_ioc_database, download_all_stix, stix_files, update_index, update_mvt_native
 from .plugins import CollectorResult, execute_plugins
 from .profiles import AcquisitionProfile, resolve_profile
 from .reporting import generate_reports
+from .security_state import analyze_security_state
 from .scoring import calculate_verdict
 from .signing import create_case_seal
 from .timeline import write_unified_timeline
@@ -265,6 +267,17 @@ def run_scan(args) -> int:
     inventory_path = case.package_analysis / "package-inventory.json"
     if inventory_path.is_file():
         package_inventory = enrich_inventory_with_local_apks(inventory_path, [case.androidqf_working])
+    apk_analysis = analyze_apk_tree(case.androidqf_working, case.package_analysis / "apk-analysis.json")
+    if apk_analysis:
+        info(f"Static APK analyses: {len(apk_analysis)}")
+
+    security_state = analyze_security_state(
+        metadata,
+        capabilities.to_dict(),
+        package_inventory,
+        auxiliary={"accessibility_services": metadata.get("enabled_accessibility_services")},
+    )
+    case.write_json("03_analysis/security-state.json", security_state)
 
     heading("Running MVT analysis")
     mvt = run_mvt(case, iocs)
@@ -306,6 +319,17 @@ def run_scan(args) -> int:
     )
     extended, extended_findings = analyze_extended(case, iocs)
     findings.extend(extended_findings)
+    findings.extend(
+        Finding(
+            str(item.get("severity", "medium")),
+            "security-state",
+            str(item.get("signal", "")),
+            str(item.get("detail", "")),
+            int(item.get("score", 0)),
+        )
+        for item in security_state.get("findings", [])
+        if str(item.get("signal", "")).startswith("composite-")
+    )
     info(f"Heuristic and extended findings: {len(findings)}")
     for finding in findings:
         message = f"{finding.severity.upper()} [{finding.category}] {finding.title}: {finding.evidence}"
@@ -359,6 +383,7 @@ def run_scan(args) -> int:
         package_inventory=package_inventory,
         aleapp=aleapp,
         timeline=timeline,
+        security_state=security_state,
     )
     append_event(
         case.custody_log,
@@ -406,6 +431,9 @@ def analyze_existing(args) -> int:
     profile = AcquisitionProfile(**profile_data) if set(AcquisitionProfile.__dataclass_fields__).issubset(profile_data) else profile_data
     inventory_path = case.package_analysis / "package-inventory.json"
     package_inventory = enrich_inventory_with_local_apks(inventory_path, [case.androidqf_working]) if inventory_path.is_file() else {}
+    apk_analysis = analyze_apk_tree(case.androidqf_working, case.package_analysis / "apk-analysis.json")
+    security_state = analyze_security_state(metadata, capabilities, package_inventory)
+    case.write_json("03_analysis/security-state.json", security_state)
 
     mvt = run_mvt(case, iocs)
     aleapp_mode = str(profile_data.get("aleapp", "auto")) if isinstance(profile_data, dict) else "auto"
@@ -420,6 +448,17 @@ def analyze_existing(args) -> int:
     )
     extended, extended_findings = analyze_extended(case, iocs)
     findings.extend(extended_findings)
+    findings.extend(
+        Finding(
+            str(item.get("severity", "medium")),
+            "security-state",
+            str(item.get("signal", "")),
+            str(item.get("detail", "")),
+            int(item.get("score", 0)),
+        )
+        for item in security_state.get("findings", [])
+        if str(item.get("signal", "")).startswith("composite-")
+    )
     timeline = write_unified_timeline(case.root, case.timeline_analysis, cache / "stix" / "ioc.db")
 
     from .capabilities import AcquisitionPlan
@@ -467,6 +506,7 @@ def analyze_existing(args) -> int:
         package_inventory=package_inventory,
         aleapp=aleapp,
         timeline=timeline,
+        security_state=security_state,
     )
     append_event(case.custody_log, "case_reanalyzed", actor="h3st4k3r", details={"verdict": asdict(result)})
     print_verdict(result.message, result.level)

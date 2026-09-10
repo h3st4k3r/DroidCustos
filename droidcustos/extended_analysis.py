@@ -10,7 +10,6 @@ import json
 import re
 import shutil
 import sqlite3
-import tarfile
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -18,9 +17,11 @@ from pathlib import Path
 from typing import Iterable, Iterator
 from urllib.parse import urlparse
 
+from .archive_safety import UnsafeArchiveError, safe_extract_tar
 from .case import CasePaths
 from .heuristics import Finding
 from .indicators import extract_simple_indicators
+from .ioc_matcher import IOCExpression, load_stix_expressions, match_expressions
 
 
 URL_RE = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
@@ -61,16 +62,7 @@ def _safe_extract_tar(archive: Path, destination: Path) -> None:
     """Handle safe extract tar operations."""
     if destination.exists():
         shutil.rmtree(destination)
-    destination.mkdir(parents=True, exist_ok=True)
-    base = destination.resolve()
-    with tarfile.open(archive, "r:*") as package:
-        for member in package.getmembers():
-            normalized = member.name.lstrip("/")
-            target = (destination / normalized).resolve()
-            if target != base and base not in target.parents:
-                raise RuntimeError(f"Unsafe TAR member: {member.name}")
-            member.name = normalized
-        package.extractall(destination)
+    safe_extract_tar(archive, destination)
 
 
 def _connect_read_only(path: Path) -> sqlite3.Connection:
@@ -278,7 +270,30 @@ def _match_observables(observables: Iterable[str], lookup: dict[str, set[str]], 
     return matches
 
 
-def _parse_user_hashes(path: Path, lookup: dict[str, set[str]]) -> tuple[dict[str, object], list[dict[str, str]]]:
+def _typed_observables(observables: Iterable[str]) -> dict[str, set[str]]:
+    """Group extended artifact values by matcher observable type."""
+    typed: dict[str, set[str]] = {"url": set(), "domain": set(), "ipv4": set(), "ipv6": set(), "sha256": set()}
+    for value in observables:
+        raw = str(value).strip()
+        if URL_RE.match(raw):
+            typed["url"].add(raw)
+            hostname = urlparse(raw).hostname
+            if hostname:
+                typed["domain"].add(hostname)
+            continue
+        if re.fullmatch(r"[0-9a-fA-F]{64}", raw):
+            typed["sha256"].add(raw)
+            continue
+        try:
+            address = ipaddress.ip_address(raw)
+        except ValueError:
+            typed["domain"].add(raw)
+        else:
+            typed["ipv4" if address.version == 4 else "ipv6"].add(str(address))
+    return typed
+
+
+def _parse_user_hashes(path: Path, lookup: dict[str, set[str]], expressions: list[IOCExpression] | None = None) -> tuple[dict[str, object], list[dict[str, str]]]:
     """Handle parse user hashes operations."""
     by_hash: dict[str, list[str]] = defaultdict(list)
     extension_counts: Counter[str] = Counter()
@@ -299,7 +314,10 @@ def _parse_user_hashes(path: Path, lookup: dict[str, set[str]]) -> tuple[dict[st
         extension_counts[suffix or "<none>"] += 1
         images += int(suffix in IMAGE_EXTENSIONS)
         documents += int(suffix in DOCUMENT_EXTENSIONS)
-        if digest in lookup["hashes"]:
+        if expressions is not None:
+            for item in match_expressions({"sha256": [digest]}, expressions):
+                matches.append({"type": "sha256", "observable": digest, "matched_ioc": str(item.get("pattern", "")), "source": file_path})
+        elif digest in lookup["hashes"]:
             matches.append({"type": "sha256", "observable": digest, "matched_ioc": digest, "source": file_path})
 
     duplicates = {digest: paths for digest, paths in by_hash.items() if len(paths) > 1}
@@ -322,6 +340,7 @@ def analyze_extended(case: CasePaths, ioc_files: list[Path]) -> tuple[ExtendedAn
         case.write_json("03_analysis/extended/summary.json", asdict(summary))
         return summary, findings
     lookup = _ioc_lookup(ioc_files)
+    expressions = load_stix_expressions(ioc_files)
     observables_by_source: dict[str, set[str]] = defaultdict(set)
 
     private_archive = case.extended_evidence / "private" / "selected-private-artifacts.tar"
@@ -329,7 +348,7 @@ def analyze_extended(case: CasePaths, ioc_files: list[Path]) -> tuple[ExtendedAn
         try:
             _safe_extract_tar(private_archive, case.private_working)
             summary.private_archive_extracted = True
-        except (OSError, tarfile.TarError, RuntimeError) as exc:
+        except (OSError, UnsafeArchiveError, RuntimeError) as exc:
             summary.errors.append(f"Private archive extraction failed: {exc}")
 
     search_roots = [case.androidqf_working, case.private_working]
@@ -396,6 +415,7 @@ def analyze_extended(case: CasePaths, ioc_files: list[Path]) -> tuple[ExtendedAn
     hash_summary, hash_matches = _parse_user_hashes(
         case.extended_evidence / "user_files" / "user-files.sha256",
         lookup,
+        expressions,
     )
     summary.user_file_hashes = int(hash_summary["total"])
     summary.image_hashes = int(hash_summary["images"])
@@ -411,7 +431,19 @@ def analyze_extended(case: CasePaths, ioc_files: list[Path]) -> tuple[ExtendedAn
         summary.copied_user_files = sum(1 for path in copied_root.rglob("*") if path.is_file())
 
     for source, values in observables_by_source.items():
-        summary.ioc_matches.extend(_match_observables(values, lookup, source))
+        for match in match_expressions(_typed_observables(values), expressions):
+            observed = ", ".join(
+                f"{item.get('type')}={item.get('value')}"
+                for item in match.get("matched_observables", [])
+            )
+            summary.ioc_matches.append(
+                {
+                    "type": "stix-expression",
+                    "observable": observed,
+                    "matched_ioc": str(match.get("pattern", "")),
+                    "source": source,
+                }
+            )
     summary.ioc_matches.extend(hash_matches)
     summary.unique_network_observables = len(set().union(*observables_by_source.values())) if observables_by_source else 0
 

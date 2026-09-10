@@ -31,9 +31,14 @@ It is designed for repeatable examinations where the operator needs to understan
 - **License:** GPL-3.0-or-later
 - **Host systems:** macOS and Linux
 - **Target systems:** Designed for Android 8 and later
-- **Validated target for this release:** Python 3.12
+- **Validated target for this release:** Python 3.12; CI covers Python 3.10–3.13 on Ubuntu and macOS
 - **Network use:** Optional; offline analysis is supported with cached tools and IOC data
 - **Evidence upload:** None; DroidCustos does not send case data to external services
+
+The core workflow uses open-source tools and does not require a paid API or cloud account. MVT,
+AndroidQF and ALEAPP are optional managed tools; offline analysis with cached evidence and IOC data
+is supported. Network access is used only when the operator explicitly updates tools or public IOC
+sources.
 
 Actual coverage depends on the Android version, OEM, device state, available services, user profiles, permissions and whether the device is unlocked.
 
@@ -175,6 +180,16 @@ Check the final environment:
 ```bash
 .venv/bin/droidcustos doctor
 ```
+
+Run the local regression suite from the same environment:
+
+```bash
+.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/python -m pytest
+```
+
+The CI workflow also runs `compileall`, the complete pytest suite, a wheel build and a clean wheel
+installation smoke test. It does not connect to an Android device.
 
 ### 3. Prepare the Android device
 

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Iterable
 from urllib.parse import urlparse
 
-from .indicators import load_ioc_lookup
+from .ioc_matcher import IOCExpression, load_database_expressions, match_expressions
 
 
 URL_RE = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
@@ -55,7 +55,7 @@ class TimelineEvent:
     evidence_file: str
     evidence_sha256: str
     parser: str
-    ioc_matches: list[dict[str, str]]
+    ioc_matches: list[dict[str, object]]
     raw: dict[str, object]
 
     def to_dict(self) -> dict[str, object]:
@@ -141,34 +141,31 @@ def _extract_observables(text: str) -> set[str]:
     return values
 
 
-def _match_iocs(values: Iterable[str], lookup: dict[str, set[str]]) -> list[dict[str, str]]:
-    """Match timeline observables against active normalized IOCs."""
-    matches: list[dict[str, str]] = []
-    for value in values:
-        lowered = value.lower().rstrip(".")
-        if lowered in lookup.get("sha256", set()):
-            matches.append({"type": "sha256", "observable": value, "indicator": lowered})
+def _typed_observables(text: str) -> dict[str, set[str]]:
+    """Extract observables grouped by the types understood by the IOC matcher."""
+    values: dict[str, set[str]] = {"url": set(), "domain": set(), "ipv4": set(), "ipv6": set(), "sha256": set()}
+    for url in URL_RE.findall(text):
+        cleaned = url.rstrip(".,);]")
+        values["url"].add(cleaned)
+        hostname = urlparse(cleaned).hostname
+        if hostname:
+            values["domain"].add(hostname)
+    for domain in DOMAIN_RE.findall(text):
+        values["domain"].add(domain)
+    for candidate in IP_RE.findall(text):
+        try:
+            address = ipaddress.ip_address(candidate)
+        except ValueError:
             continue
-        if lowered in lookup.get("ipv4", set()) or lowered in lookup.get("ipv6", set()):
-            matches.append({"type": "ip", "observable": value, "indicator": lowered})
-            continue
-        if value in lookup.get("url", set()):
-            matches.append({"type": "url", "observable": value, "indicator": value})
-            continue
-        hostname = urlparse(value).hostname if value.startswith(("http://", "https://")) else lowered
-        for domain in lookup.get("domain", set()):
-            normalized = domain.lower().rstrip(".")
-            if hostname == normalized or hostname.endswith("." + normalized):
-                matches.append({"type": "domain", "observable": value, "indicator": normalized})
-                break
-    unique = {(item["type"], item["observable"], item["indicator"]): item for item in matches}
-    return list(unique.values())
+        values["ipv4" if address.version == 4 else "ipv6"].add(str(address))
+    values["sha256"].update(value.lower() for value in HASH_RE.findall(text))
+    return values
 
 
-def _event_from_record(record: dict[str, object], source: str, artifact: str, evidence_file: str, parser: str, lookup: dict[str, set[str]]) -> TimelineEvent:
+def _event_from_record(record: dict[str, object], source: str, artifact: str, evidence_file: str, parser: str, expressions: list[IOCExpression]) -> TimelineEvent:
     """Convert one arbitrary artifact record into a timeline event."""
     text = json.dumps(record, sort_keys=True, default=str)
-    matches = _match_iocs(_extract_observables(text), lookup)
+    matches = match_expressions(_typed_observables(text), expressions)
     severity = "critical" if matches else str(record.get("severity", "informational")).lower()
     confidence = 100 if matches else int(record.get("confidence", 50) or 50)
     user_text = _string_value(record, ("user_id", "user", "userid"))
@@ -235,7 +232,7 @@ def _read_tabular(path: Path) -> Iterable[dict[str, object]]:
 
 def collect_timeline_events(case_root: Path, ioc_database: Path) -> list[TimelineEvent]:
     """Collect normalized events from all available analysis products."""
-    lookup = load_ioc_lookup(ioc_database)
+    expressions = load_database_expressions(ioc_database)
     events: list[TimelineEvent] = []
     sources = [
         (case_root / "00_metadata" / "custody.jsonl", "custody", "custody-event", "droidcustos"),
@@ -245,7 +242,7 @@ def collect_timeline_events(case_root: Path, ioc_database: Path) -> list[Timelin
         if not path.is_file():
             continue
         for record in _read_json_records(path):
-            events.append(_event_from_record(record, source, artifact, str(path), parser, lookup))
+            events.append(_event_from_record(record, source, artifact, str(path), parser, expressions))
 
     recursive_roots = [
         (case_root / "03_analysis" / "mvt", "mvt", "mvt-record", "mvt"),
@@ -265,7 +262,7 @@ def collect_timeline_events(case_root: Path, ioc_database: Path) -> list[Timelin
             else:
                 continue
             for record in records:
-                events.append(_event_from_record(record, source, artifact, str(path), parser, lookup))
+                events.append(_event_from_record(record, source, artifact, str(path), parser, expressions))
     return events
 
 

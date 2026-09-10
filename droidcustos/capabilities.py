@@ -21,6 +21,13 @@ class AndroidUser:
     running: bool
     profile_group_id: int | None = None
     user_type: str = "unknown"
+    parent_id: int | None = None
+    unlocked: bool | None = None
+    quiet_mode: bool = False
+    managed: bool = False
+    private: bool = False
+    clone: bool = False
+    guest: bool = False
 
 
 @dataclass(frozen=True)
@@ -93,34 +100,76 @@ def _adb_shell(adb: str, serial: str, arguments: list[str], command_log: Path | 
 
 def parse_users(text: str) -> list[AndroidUser]:
     """Parse Android user and profile output."""
+    return parse_user_sources(text)
+
+
+def parse_user_sources(*sources: str) -> list[AndroidUser]:
+    """Merge user records from pm, cmd user and dumpsys user evidence."""
     users: list[AndroidUser] = []
-    for line in text.splitlines():
-        match = _USER_RE.search(line)
-        if not match:
-            continue
-        user_id = int(match.group("id"))
-        name = match.group("name").strip() or f"user-{user_id}"
-        flags = match.group("flags").strip()
-        lowered = line.lower()
-        user_type = "primary" if user_id == 0 else "secondary"
-        if "managed" in lowered or "profile" in lowered:
-            user_type = "work-profile"
-        if "private" in lowered:
-            user_type = "private-space"
-        if "guest" in lowered:
-            user_type = "guest"
-        users.append(
-            AndroidUser(
+    merged: dict[int, AndroidUser] = {}
+    for text in sources:
+        for line in text.splitlines():
+            match = _USER_RE.search(line)
+            if not match:
+                continue
+            user_id = int(match.group("id"))
+            name = match.group("name").strip() or f"user-{user_id}"
+            flags = match.group("flags").strip()
+            lowered = line.lower()
+            profile_group = re.search(r"(?:profilegroupid|profile_group_id)[=:](\d+)", lowered)
+            parent = re.search(r"(?:parentid|parent_id)[=:](\d+)", lowered)
+            managed = "managed" in lowered or "profile" in lowered
+            private = "private" in lowered
+            clone = "clone" in lowered
+            guest = "guest" in lowered
+            if private:
+                user_type = "private-space"
+            elif clone:
+                user_type = "clone-profile"
+            elif guest:
+                user_type = "guest"
+            elif managed:
+                user_type = "work-profile"
+            else:
+                user_type = "primary" if user_id == 0 else "secondary"
+            current = AndroidUser(
                 user_id=user_id,
                 name=name,
                 flags=flags,
                 running="running" in lowered,
+                profile_group_id=int(profile_group.group(1)) if profile_group else None,
                 user_type=user_type,
+                parent_id=int(parent.group(1)) if parent else None,
+                unlocked=True if "unlocked" in lowered else None,
+                quiet_mode="quiet_mode" in lowered or "quiet mode" in lowered,
+                managed=managed,
+                private=private,
+                clone=clone,
+                guest=guest,
             )
-        )
+            previous = merged.get(user_id)
+            if previous is None:
+                merged[user_id] = current
+            else:
+                merged[user_id] = AndroidUser(
+                    user_id=user_id,
+                    name=previous.name if previous.name != f"user-{user_id}" else current.name,
+                    flags=" ".join(sorted(set(filter(None, (previous.flags, current.flags))))),
+                    running=previous.running or current.running,
+                    profile_group_id=previous.profile_group_id or current.profile_group_id,
+                    user_type=current.user_type if current.user_type != "secondary" else previous.user_type,
+                    parent_id=previous.parent_id or current.parent_id,
+                    unlocked=previous.unlocked if previous.unlocked is not None else current.unlocked,
+                    quiet_mode=previous.quiet_mode or current.quiet_mode,
+                    managed=previous.managed or current.managed,
+                    private=previous.private or current.private,
+                    clone=previous.clone or current.clone,
+                    guest=previous.guest or current.guest,
+                )
+    users.extend(merged.values())
     if not users:
         users.append(AndroidUser(0, "Owner", "", True, user_type="primary"))
-    return users
+    return sorted(users, key=lambda item: item.user_id)
 
 
 def parse_storage_volumes(text: str) -> list[StorageVolume]:
@@ -219,11 +268,13 @@ def discover_capabilities(
             props[match.group(1)] = match.group(2)
 
     users_result = _adb_shell(adb, serial, ["pm", "list", "users"], command_log, timeout=60)
+    cmd_users_result = _adb_shell(adb, serial, ["cmd", "user", "list"], command_log, timeout=60)
+    dumpsys_users_result = _adb_shell(adb, serial, ["dumpsys", "user"], command_log, timeout=60)
     volumes_result = _adb_shell(adb, serial, ["sm", "list-volumes", "all"], command_log, timeout=60)
     dumpsys_result = _adb_shell(adb, serial, ["dumpsys", "-l"], command_log, timeout=60)
     cmd_result = _adb_shell(adb, serial, ["cmd", "-l"], command_log, timeout=60)
 
-    users = parse_users(users_result.stdout)
+    users = parse_user_sources(users_result.stdout, cmd_users_result.stdout, dumpsys_users_result.stdout)
     volumes = parse_storage_volumes(volumes_result.stdout)
     commands = {
         name: _probe_command(adb, serial, name, command_log)

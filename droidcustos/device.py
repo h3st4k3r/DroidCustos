@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .commands import run_capture
+from .time_sync import measure_time_sync
 
 
 @dataclass(frozen=True)
@@ -108,6 +109,7 @@ def collect_device_metadata(adb: str, serial: str, output: Path, command_log: Pa
         data[name] = adb_shell(adb, serial, "getprop", prop, command_log=command_log)
 
     data["device_time"] = adb_shell(adb, serial, "date", command_log=command_log)
+    data["time_sync"] = measure_time_sync(adb, serial, command_log)
     data["uptime"] = adb_shell(adb, serial, "uptime", command_log=command_log)
     data["adb_enabled"] = adb_shell(adb, serial, "settings", "get", "global", "adb_enabled", command_log=command_log)
     data["enabled_accessibility_services"] = adb_shell(

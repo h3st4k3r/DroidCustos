@@ -10,7 +10,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from .capabilities import AcquisitionPlan
-from .plugins import CollectorResult, coverage_summary
+from .plugins import CollectorResult
 
 
 @dataclass
@@ -23,6 +23,12 @@ class CoverageReport:
     permission_denied_collectors: int
     coverage_score: float
     statuses: list[dict[str, object]] = field(default_factory=list)
+    execution_coverage: float = 0.0
+    forensic_depth: float = 0.0
+    coverage_by_user: dict[str, object] = field(default_factory=dict)
+    coverage_by_domain: dict[str, object] = field(default_factory=dict)
+    missing_critical_sources: list[str] = field(default_factory=list)
+    limitations: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-safe coverage report."""
@@ -79,6 +85,37 @@ def calculate_coverage(
     skipped = sum(1 for item in statuses if item["status"] == "NOT_SUPPORTED")
     weighted = collected + partial * 0.5
     score = round(weighted / len(relevant) * 100, 2) if relevant else 0.0
+    critical_names = ("androidqf", "volatile-state", "package-inventory")
+    missing = [
+        name for name in critical_names
+        if not any(item["collector"] == name and item["status"] == "COLLECTED" for item in statuses)
+    ]
+    domains: dict[str, list[dict[str, object]]] = {}
+    for item in statuses:
+        name = str(item["collector"])
+        domain = "oem" if name.startswith("plugin:") else "extended" if name.startswith("extended:") else {
+            "androidqf": "androidqf",
+            "package-inventory": "packages",
+            "volatile-state": "volatile",
+            "adb-diagnostics": "security-state",
+            "aleapp": "aleapp",
+        }.get(name, "evidence-integrity")
+        domains.setdefault(domain, []).append(item)
+    domain_summary = {
+        name: {
+            "target": len(items),
+            "collected": sum(item["status"] == "COLLECTED" for item in items),
+            "partial": sum(item["status"] == "PARTIAL" for item in items),
+            "failed": sum(item["status"] in {"FAILED", "TIMED_OUT", "PERMISSION_DENIED"} for item in items),
+        }
+        for name, items in sorted(domains.items())
+    }
+    users = {str(user_id): {"package_records": 0} for user_id in plan.selected_users}
+    records = package_inventory.get("records", []) if isinstance(package_inventory, dict) else []
+    for record in records if isinstance(records, list) else []:
+        if isinstance(record, dict):
+            user_id = str(record.get("user_id", "unknown"))
+            users.setdefault(user_id, {"package_records": 0})["package_records"] += 1
     return CoverageReport(
         target_collectors=len(relevant),
         collected_collectors=collected,
@@ -88,6 +125,15 @@ def calculate_coverage(
         permission_denied_collectors=denied,
         coverage_score=score,
         statuses=statuses,
+        execution_coverage=score,
+        forensic_depth=round((collected + partial * 0.5) / max(len(statuses), 1) * 100, 2),
+        coverage_by_user=users,
+        coverage_by_domain=domain_summary,
+        missing_critical_sources=missing,
+        limitations=[
+            "Coverage measures available evidence sources, not device compromise probability.",
+            "Unavailable or locked Android profiles can reduce forensic depth without appearing as an IOC.",
+        ],
     )
 
 
