@@ -6,8 +6,6 @@
 |____/|_| \_\\___/___|____/    \____|\___/|____/ |_| \___/|____/
 ```
 
-# DroidCustos
-
 **Capability-aware Android forensic triage, evidence preservation and IOC correlation.**
 
 [![Status](https://img.shields.io/badge/status-public%20alpha-F59E0B)](./RELEASE_NOTES.md)
