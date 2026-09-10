@@ -6,7 +6,9 @@
 |____/|_| \_\\___/___|____/    \____|\___/|____/ |_| \___/|____/
 ```
 
+
 **Capability-aware Android forensic triage, evidence preservation and IOC correlation.**
+
 
 [![Status](https://img.shields.io/badge/status-public%20alpha-F59E0B)](./RELEASE_NOTES.md)
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-001538)](./LICENSE)
@@ -14,7 +16,9 @@
 [![Security](https://img.shields.io/badge/security-responsible%20disclosure-001538)](./SECURITY.md)
 [![Author](https://img.shields.io/badge/author-h3st4k3r-111827?logo=github&logoColor=white)](https://github.com/h3st4k3r)
 
+
 <img width="1566" height="909" alt="DroidCustos forensic report dashboard" src="https://github.com/user-attachments/assets/37dcfc22-590c-4239-8079-3ad33a489cb8" />
+
 
 DroidCustos is a command-line toolkit for authorized Android forensic triage. It brings together device discovery, logical acquisition, ADB diagnostics, MVT, optional ALEAPP parsing, STIX threat intelligence, OEM-aware collectors, evidence hashing, timelines and analyst-friendly reports.
 
