@@ -2,7 +2,7 @@ import io
 import zipfile
 from pathlib import Path
 
-from droidcustos.apk_analysis import analyze_apk
+from droidcustos.apk_analysis import analyze_apk, analyze_apk_tree
 
 
 def test_static_apk_analysis_inventory(tmp_path: Path) -> None:
@@ -50,3 +50,18 @@ def test_apk_analysis_does_not_classify_url_as_malicious(tmp_path: Path) -> None
     result = analyze_apk(apk)
     assert result["observables"]["urls"] == ["https://example.org/documentation"]
     assert "malicious" not in result
+
+
+def test_apk_tree_keeps_corrupt_apk_as_an_error_record(tmp_path: Path) -> None:
+    """Keep one corrupt APK from aborting analysis of the complete tree."""
+    apk = tmp_path / "broken.apk"
+    apk.write_bytes(b"not a zip archive")
+    results = analyze_apk_tree(tmp_path)
+    assert results == [
+        {
+            "format": "droidcustos-apk-analysis-v1",
+            "analysis_status": "ERROR",
+            "path": str(apk),
+            "error": "BadZipFile: File is not a zip file",
+        }
+    ]

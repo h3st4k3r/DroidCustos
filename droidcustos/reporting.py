@@ -140,6 +140,19 @@ def _indicator_value(indicator: object) -> str:
     return _compact(indicator, 500)
 
 
+def _attribution_label(value: object) -> str:
+    """Render STIX attribution entities as a compact report label."""
+    if not isinstance(value, (list, tuple)):
+        return _compact(value, 500)
+    labels = []
+    for item in value:
+        if not isinstance(item, dict) or not item.get("name"):
+            continue
+        scope = "direct" if item.get("scope") == "direct" else "related"
+        labels.append(f"{item.get('type', 'entity')}: {item['name']} ({scope})")
+    return _compact("; ".join(labels), 500)
+
+
 def _ioc_rows(
     mvt: MvtSummary,
     extended: ExtendedAnalysisSummary,
@@ -151,18 +164,27 @@ def _ioc_rows(
         indicator_type = _compact(indicator.get("type", "unknown")) if isinstance(indicator, dict) else "unknown"
         value = _indicator_value(indicator)
         name = _compact(indicator.get("name", "")) if isinstance(indicator, dict) else ""
+        attribution = _attribution_label(indicator.get("attribution", [])) if isinstance(indicator, dict) else ""
         source = _compact(indicator.get("stix2_file_name") or indicator.get("source", "")) if isinstance(indicator, dict) else ""
-        rows[("MVT", indicator_type, value)] = ["MVT", indicator_type, value, name, source]
+        rows[("MVT", indicator_type, value)] = ["MVT", indicator_type, value, name, attribution, source]
     for match in extended.ioc_matches:
         indicator_type = _compact(match.get("type") or match.get("indicator_type") or "unknown")
         value = _compact(match.get("value") or match.get("indicator") or match.get("observable") or "")
         name = _compact(match.get("name") or match.get("indicator_name") or "")
+        attribution = _attribution_label(match.get("attribution", []))
         source = _compact(match.get("source") or match.get("stix2_file_name") or "")
-        rows[("Extended analysis", indicator_type, value)] = ["Extended analysis", indicator_type, value, name, source]
+        rows[("Extended analysis", indicator_type, value)] = ["Extended analysis", indicator_type, value, name, attribution, source]
     for finding in findings:
         if finding.category != "ioc":
             continue
-        rows[("DroidCustos", finding.title, finding.evidence)] = ["DroidCustos", finding.title, finding.evidence, "", "Normalized STIX database"]
+        rows[("DroidCustos", finding.title, finding.evidence)] = [
+            "DroidCustos",
+            finding.title,
+            finding.evidence,
+            "",
+            _attribution_label(finding.attribution),
+            "Normalized STIX database",
+        ]
     return sorted(rows.values(), key=lambda row: (str(row[0]), str(row[1]), str(row[2])))
 
 
@@ -339,7 +361,7 @@ def _report_tables(
     definitions = {
         "principal_findings": (["Severity", "Classification", "Category/Module", "Finding", "Evidence", "Score"], principal_rows),
         "findings": (["Severity", "Classification", "Category", "Finding", "Evidence", "Score"], findings_rows),
-        "confirmed_ioc_matches": (["Engine", "Indicator type", "Value", "Name/Campaign", "IOC source"], ioc_rows),
+        "confirmed_ioc_matches": (["Engine", "Indicator type", "Value", "Name/Campaign", "Attribution", "IOC source"], ioc_rows),
         "mvt_alerts": (["Level", "Classification", "Module", "Occurrences", "Message", "Matched indicator"], mvt_rows),
         "coverage": (["Collector", "Status", "Detail"], coverage_rows),
         "packages": (["Package", "User", "UID", "Version", "Installer", "Class", "Requested permissions", "Certificates", "Source path"], packages_rows),

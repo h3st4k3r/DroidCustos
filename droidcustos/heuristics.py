@@ -22,6 +22,7 @@ class Finding:
     title: str
     evidence: str
     score: int
+    attribution: tuple[dict[str, str], ...] = ()
 
 
 ROOT_PACKAGE_TOKENS = (
@@ -107,6 +108,7 @@ def _ioc_findings(matches: list[dict[str, object]], evidence: str) -> list[Findi
                 "Complete STIX expression matches published IOC evidence",
                 f"{evidence}: {match.get('pattern', '')}",
                 100,
+                tuple(item for item in match.get("attribution", []) if isinstance(item, dict)),
             )
         )
     return findings

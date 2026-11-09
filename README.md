@@ -52,6 +52,7 @@ Most Android triage workflows require several separate tools and leave the analy
 A normal run can:
 
 - Inspect the device before acquisition.
+- Run a recorded preflight for ADB readiness, battery, available storage and AndroidQF availability before lengthy acquisition steps.
 - Capture volatile system and network state.
 - Run AndroidQF.
 - Collect complementary ADB diagnostics and a bug report.
@@ -60,6 +61,7 @@ A normal run can:
 - Build a normalized multi-user package inventory.
 - Correlate packages, certificates, hashes and network observables with STIX indicators.
 - Evaluate complete STIX boolean expressions without splitting related observables into independent matches.
+- Preserve STIX attribution for matched indicators, including directly indicated malware and one-hop related campaigns, threat actors and tools.
 - Separate confirmed IOC matches from heuristic alerts.
 - Inspect acquired APKs statically, including hashes, DEX/native libraries, signing entries, manifest metadata and suspicious capabilities.
 - Record verified-boot, SELinux, patch-level, ADB, root, owner/profile and special-access evidence as a separate security posture.
@@ -108,6 +110,8 @@ See:
 - Hashes acquired APKs and files.
 - Extracts APK signing-certificate data when Android SDK tools are available.
 - Performs static APK analysis without executing or unpacking APK content into the host file system.
+- Applies member-count, decompression-ratio, per-entry and total-size limits while inspecting APK ZIP containers.
+- Keeps corrupt or rejected APKs as explicit analysis errors so one damaged artifact does not abort the complete case.
 - Records APK package metadata, permissions, components, exported actions, special capabilities, DEX/native hashes and passive network observables when available.
 - Runs MVT against AndroidQF and bug-report evidence.
 - Runs ALEAPP when installed and applicable.
@@ -120,6 +124,7 @@ See:
 - Records host/device time synchronization offset and uncertainty for timestamp interpretation.
 - Generates searchable offline HTML reports and complete CSV exports.
 - Creates and verifies SHA-256 evidence manifests.
+- Rejects tampered manifest paths, traversal entries and symlinked evidence during verification.
 - Creates optional Ed25519 case seals.
 - Exports and imports AES-256-GCM encrypted case archives.
 - Creates package and device baselines for later comparison.
@@ -419,6 +424,24 @@ kept as expressions: an `AND` expression only matches when all of its terms are 
 same evidence scope. Unsupported pattern syntax is reported for review instead of being silently
 treated as a match.
 
+When a STIX bundle or normalized `ioc.db` contains relationships from an indicator to a named
+malware, campaign, threat actor or tool, each confirmed match retains that attribution. Direct
+relationships are marked `direct`; a single supported relationship hop from a directly indicated
+entity is marked `related`. The attribution is available in `summary.json`, timeline and extended
+analysis match records, and the `confirmed_ioc_matches` CSV/Markdown/HTML table. Related entities
+are context for analyst review and should not be interpreted as proof that the related campaign
+or actor authored the matched artifact.
+
+Before a scan continues past device connection, DroidCustos writes
+`00_metadata/preflight.json` and a `preflight_finished` event. The record includes the exact ADB
+responses, parsed battery state, filesystem capacity, AndroidQF path and a scope-based duration
+estimate. A blocking condition stops the acquisition while retaining the case directory and its
+preflight record for review.
+
+DroidCustos does not silently redact or rewrite acquired forensic data. Sensitive evidence remains
+under the case access controls and is accompanied by custody events, hashes and provenance so an
+analyst can distinguish original output from derived interpretations.
+
 ## Re-analyze an existing case
 
 Use this after updating DroidCustos or its IOC sources:
@@ -496,6 +519,10 @@ A confirmed IOC requires at least one of the following:
 For compound indicators, all required terms must be observed in the same evidence scope. A match
 is also checked against STIX `valid_from`, `valid_until` and `revoked` state. This prevents an
 expired, revoked or partially observed expression from being promoted to a confirmed match.
+
+Reports preserve the associated STIX malware/campaign attribution when the source provides it.
+The confirmed IOC table separates the indicator name from `Attribution` and labels each entity as
+`direct` or `related` so the evidence strength remains visible.
 
 MVT heuristics, unusual permissions, crashes, old security patches and package-state anomalies are reported separately for analyst review.
 

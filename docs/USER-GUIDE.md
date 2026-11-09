@@ -73,6 +73,11 @@ Review:
 - Planned collectors.
 - Expected private-data limitations.
 
+The scan then performs a recorded preflight before any lengthy acquisition. It checks the ADB
+transport, battery and charging state, free space on the case and cache filesystems, and the
+AndroidQF executable. The exact ADB output and parsed values are retained in
+`00_metadata/preflight.json`; blocking conditions stop the scan but keep the case for review.
+
 ## 5. Choose an acquisition profile
 
 ### Minimal standard triage

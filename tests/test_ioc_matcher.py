@@ -90,3 +90,57 @@ def test_observable_normalization() -> None:
     assert normalize_value("url", "HTTPS://Bad.Example/path,") == "https://bad.example/path"
     assert normalize_value("sha256", "A" * 64) == "a" * 64
     assert normalize_value("ipv6", "2001:0db8:0:0:0:0:0:1") == "2001:db8::1"
+
+
+def test_indicator_attribution_includes_direct_and_related_entities(tmp_path: Path) -> None:
+    """Expose direct malware and related campaign attribution for a match."""
+    path = tmp_path / "attribution.stix2"
+    path.write_text(
+        json.dumps(
+            {
+                "type": "bundle",
+                "objects": [
+                    {
+                        "type": "indicator",
+                        "id": "indicator--pegasus-domain",
+                        "name": "Pegasus infrastructure domain",
+                        "pattern": "[domain-name:value = 'pegasus.example']",
+                    },
+                    {"type": "malware", "id": "malware--pegasus", "name": "Pegasus"},
+                    {"type": "campaign", "id": "campaign--mobile-targeting", "name": "Mobile Targeting Campaign"},
+                    {
+                        "type": "relationship",
+                        "id": "relationship--indicator-malware",
+                        "relationship_type": "indicates",
+                        "source_ref": "indicator--pegasus-domain",
+                        "target_ref": "malware--pegasus",
+                    },
+                    {
+                        "type": "relationship",
+                        "id": "relationship--malware-campaign",
+                        "relationship_type": "related-to",
+                        "source_ref": "malware--pegasus",
+                        "target_ref": "campaign--mobile-targeting",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    matches = match_stix_files({"domain": ["pegasus.example"]}, [path])
+    assert matches[0]["attribution"] == [
+        {
+            "type": "malware",
+            "name": "Pegasus",
+            "stix_id": "malware--pegasus",
+            "relationship": "indicates",
+            "scope": "direct",
+        },
+        {
+            "type": "campaign",
+            "name": "Mobile Targeting Campaign",
+            "stix_id": "campaign--mobile-targeting",
+            "relationship": "related-to",
+            "scope": "related",
+        },
+    ]

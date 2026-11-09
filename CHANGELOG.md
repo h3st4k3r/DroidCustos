@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Hardened evidence-manifest verification against absolute paths, traversal entries and symlinks.
+- Added bounded APK ZIP inspection with member, compression-ratio, per-entry and total-size limits.
+- Preserved corrupt or unsafe APKs as explicit analysis errors instead of aborting the complete APK inventory.
+- Added regression tests for adversarial manifest paths and damaged APK inputs.
+- Made the no-isolation wheel build self-contained by declaring its setuptools and wheel tooling.
+- Added STIX malware, campaign, threat-actor and tool attribution to complete IOC matches, including direct and one-hop related relationships.
+- Added attribution to JSON findings and the confirmed IOC CSV, Markdown and HTML report table.
+- Added a recorded preflight before acquisition for ADB transport, battery, case/cache storage and AndroidQF availability, including a transparent duration estimate.
+
 ## 0.3.2 - 2026-08-03
 
 - Prepared a clean public-alpha source release with no case data, caches, virtual environments or build products.
