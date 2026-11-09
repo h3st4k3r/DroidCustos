@@ -15,6 +15,7 @@ from . import __version__
 from .apk_inventory import create_baseline, write_inventory_diff
 from .capabilities import build_acquisition_plan, discover_capabilities
 from .console import banner, error, info, success, warning
+from .custody import append_event, verify_custody_log
 from .device import list_devices, select_device
 from .export_case import export_encrypted_case, import_encrypted_case
 from .hashing import verify_evidence_manifest
@@ -264,6 +265,14 @@ def command_verify(args) -> int:
         for mismatch in result.get("mismatches", [])[:20]:
             print(json.dumps(mismatch, sort_keys=True))
         return 1
+    custody = verify_custody_log(root / "00_metadata" / "custody.jsonl")
+    if not custody["verified"]:
+        error(f"Custody chain verification failed: {json.dumps(custody.get('errors', []), sort_keys=True)}")
+        return 1
+    if custody["chain_complete"]:
+        success(f"Custody hash chain verified: {custody['events']} events")
+    else:
+        warning(f"Custody log contains {custody['legacy_events']} legacy unchained events")
     if args.public_key:
         seal = verify_case_seal(
             root / "05_hashes" / "case-seal.json",
@@ -274,6 +283,8 @@ def command_verify(args) -> int:
             error(json.dumps(seal, sort_keys=True))
             return 1
         success(f"Signed case seal verified: {seal['file_count']} files")
+        if not seal["custody_chain_complete"]:
+            warning("Signed case seal contains a legacy or incomplete custody chain")
     return 0
 
 
@@ -312,6 +323,14 @@ def command_seal(args) -> int:
     """Create an Ed25519 final case seal."""
     root = Path(args.case).expanduser().resolve()
     password = _password(args.password_file, "Private-key password: ") if args.password_file else None
+    case_metadata = json.loads((root / "00_metadata" / "case.json").read_text(encoding="utf-8"))
+    actor = str(case_metadata.get("operator", "unknown"))
+    append_event(
+        root / "00_metadata" / "custody.jsonl",
+        "case_seal_requested",
+        actor=actor,
+        details={"format": "droidcustos-case-seal-v2"},
+    )
     create_case_seal(
         root,
         Path(args.private_key).expanduser().resolve(),

@@ -20,6 +20,7 @@ The case stores:
 - IOC sources, URLs, commits and hashes.
 - Collector outcomes.
 - Evidence SHA-256 manifests.
+- Hash-chained custody events with explicit legacy-chain reporting.
 - Integrity-verification results.
 - Optional signed case seals.
 
@@ -34,9 +35,20 @@ Remove write permissions
 Create working copies
 Analyze working copies
 Generate reports
-Optionally sign the final case seal
+Hash-chain custody events
+Sign the complete case seal
 Optionally export with authenticated encryption
 ```
+
+Every new custody event contains the hash of the previous event and its own SHA-256 event hash.
+The verifier reports any broken link and distinguishes older unchained records from a complete
+chain. The Ed25519 case seal covers all regular files present in the case except the seal JSON and
+detached signature themselves; the evidence manifest remains the authoritative file-level hash
+record for original evidence.
+
+Once a final seal exists, in-place re-analysis is refused because it would change derived reports
+and invalidate the sealed snapshot. Re-analysis should be performed on a verified working copy and
+sealed separately.
 
 ## Known state changes
 

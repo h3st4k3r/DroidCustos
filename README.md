@@ -125,7 +125,8 @@ See:
 - Generates searchable offline HTML reports and complete CSV exports.
 - Creates and verifies SHA-256 evidence manifests.
 - Rejects tampered manifest paths, traversal entries and symlinked evidence during verification.
-- Creates optional Ed25519 case seals.
+- Hash-chains new custody events and reports legacy unchained records explicitly.
+- Creates optional Ed25519 case seals covering all regular case files except the seal artifacts.
 - Exports and imports AES-256-GCM encrypted case archives.
 - Creates package and device baselines for later comparison.
 
@@ -666,6 +667,7 @@ DroidCustos records:
 - Collector status and acquisition coverage.
 - SHA-256 hashes for original evidence.
 - Evidence-verification results.
+- Hash-chained custody events and legacy-chain status.
 - Optional Ed25519 case-seal signatures.
 
 The custody record is stored under:

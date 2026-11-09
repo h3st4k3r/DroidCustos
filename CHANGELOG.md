@@ -10,6 +10,9 @@
 - Added STIX malware, campaign, threat-actor and tool attribution to complete IOC matches, including direct and one-hop related relationships.
 - Added attribution to JSON findings and the confirmed IOC CSV, Markdown and HTML report table.
 - Added a recorded preflight before acquisition for ADB transport, battery, case/cache storage and AndroidQF availability, including a transparent duration estimate.
+- Added SHA-256 hash chaining to new custody events with tamper detection and legacy-log reporting.
+- Expanded Ed25519 case seals to cover all regular case files except the seal JSON and detached signature.
+- Prevented in-place re-analysis of finally sealed cases and recorded explicit seal requests in custody history.
 
 ## 0.3.2 - 2026-08-03
 

@@ -435,6 +435,8 @@ def run_scan(args) -> int:
 def analyze_existing(args) -> int:
     """Re-analyze an existing case with current tools and indicators."""
     case = CasePaths.from_existing(Path(args.case))
+    if case.case_seal_json.is_file() or case.case_seal_signature.is_file():
+        raise RuntimeError("The case has a final seal; re-analyze a verified working copy to preserve that seal")
     cache = Path(args.cache).expanduser().resolve() if args.cache else default_cache_dir()
     manifest, iocs = _cached_indicators(cache) if args.no_update else update_indicators(cache, case.command_log, _custom_ioc_path(args))
     integrity = verify_evidence_manifest(case.evidence_manifest_json, case.root)

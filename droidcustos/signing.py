@@ -9,11 +9,13 @@ import base64
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from pathlib import PureWindowsPath
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
+from .custody import verify_custody_log
 from .hashing import sha256_file
 
 
@@ -46,22 +48,27 @@ def _hash_if_present(path: Path, case_root: Path) -> dict[str, object] | None:
     return {"path": str(path.relative_to(case_root)), "size": path.stat().st_size, "sha256": sha256_file(path)}
 
 
-def create_case_seal(case_root: Path, private_key_path: Path, signature_path: Path, seal_path: Path, password: bytes | None = None) -> dict[str, object]:
-    """Create and sign a deterministic case-seal document."""
-    targets = [
-        case_root / "05_hashes" / "evidence-manifest.json",
-        case_root / "00_metadata" / "custody.jsonl",
-        case_root / "logs" / "commands.log",
-        case_root / "04_reports" / "summary.json",
-        case_root / "04_reports" / "report.md",
-        case_root / "03_analysis" / "timeline" / "timeline.jsonl",
+def _case_targets(case_root: Path, excluded: set[Path]) -> list[Path]:
+    """Collect every regular case file except the seal artifacts."""
+    return [
+        path
+        for path in sorted(case_root.rglob("*"))
+        if path.is_file() and not path.is_symlink() and path.resolve() not in excluded
     ]
+
+
+def create_case_seal(case_root: Path, private_key_path: Path, signature_path: Path, seal_path: Path, password: bytes | None = None) -> dict[str, object]:
+    """Create and sign a complete case seal while excluding only seal artifacts."""
+    excluded = {seal_path.resolve(), signature_path.resolve()}
+    targets = _case_targets(case_root, excluded)
+    custody = verify_custody_log(case_root / "00_metadata" / "custody.jsonl")
     seal = {
-        "format": "droidcustos-case-seal-v1",
+        "format": "droidcustos-case-seal-v2",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "generated_by": "DroidCustos",
         "author": "h3st4k3r",
         "case_root": str(case_root.resolve()),
+        "custody_chain": custody,
         "files": [item for item in (_hash_if_present(path, case_root) for path in targets) if item is not None],
     }
     encoded = json.dumps(seal, indent=2, sort_keys=True).encode("utf-8") + b"\n"
@@ -91,19 +98,42 @@ def verify_case_seal(seal_path: Path, signature_path: Path, public_key_path: Pat
         signature_valid = False
     payload = json.loads(encoded)
     errors: list[str] = []
+    signed_paths: set[str] = set()
     case_root = seal_path.parent.parent
     for item in payload.get("files", []):
-        path = case_root / str(item["path"])
-        if not path.is_file():
+        raw_path = str(item.get("path", ""))
+        signed_paths.add(raw_path)
+        relative = Path(raw_path)
+        windows = PureWindowsPath(raw_path)
+        if not raw_path or relative.is_absolute() or windows.is_absolute() or windows.drive or ".." in relative.parts or ".." in windows.parts:
+            errors.append(f"Unsafe sealed path: {raw_path}")
+            continue
+        path = case_root / relative
+        try:
+            path.resolve().relative_to(case_root.resolve())
+        except ValueError:
+            errors.append(f"Outside case root: {raw_path}")
+            continue
+        if path.is_symlink() or not path.is_file():
             errors.append(f"Missing sealed file: {path}")
             continue
         actual = sha256_file(path)
         if actual != item["sha256"]:
             errors.append(f"Hash mismatch: {path}")
+    if payload.get("format") == "droidcustos-case-seal-v2":
+        excluded = {seal_path.resolve(), signature_path.resolve()}
+        for path in _case_targets(case_root, excluded):
+            relative = str(path.relative_to(case_root))
+            if relative not in signed_paths:
+                errors.append(f"Unexpected unsigned file: {path}")
+    custody = verify_custody_log(case_root / "00_metadata" / "custody.jsonl")
     return {
         "verified": signature_valid and not errors,
         "signature_valid": signature_valid,
         "files_valid": not errors,
+        "custody_chain_verified": bool(custody["verified"]),
+        "custody_chain_complete": bool(custody["chain_complete"]),
+        "custody_chain": custody,
         "errors": errors,
         "file_count": len(payload.get("files", [])),
     }
