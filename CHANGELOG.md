@@ -16,6 +16,7 @@
 - Added APK manifest provenance, binary-manifest status, aapt/aapt2 diagnostics and signing-lineage preservation.
 - Added CI JUnit reports, installed-wheel dependency checks and a build SBOM with wheel hashes.
 - Limited CI matrix parallelism to improve reliability on shared hosted runners.
+- Pinned CI runner images to stable Ubuntu and macOS labels instead of moving `latest` aliases.
 
 ## 0.3.2 - 2026-08-03
 
