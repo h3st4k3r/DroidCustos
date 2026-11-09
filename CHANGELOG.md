@@ -9,6 +9,7 @@
 - Made the no-isolation wheel build self-contained by declaring its setuptools and wheel tooling.
 - Added STIX malware, campaign, threat-actor and tool attribution to complete IOC matches, including direct and one-hop related relationships.
 - Added attribution to JSON findings and the confirmed IOC CSV, Markdown and HTML report table.
+- Added a recorded preflight before acquisition for ADB transport, battery, case/cache storage and AndroidQF availability, including a transparent duration estimate.
 
 ## 0.3.2 - 2026-08-03
 

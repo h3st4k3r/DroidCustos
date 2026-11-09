@@ -52,6 +52,7 @@ Most Android triage workflows require several separate tools and leave the analy
 A normal run can:
 
 - Inspect the device before acquisition.
+- Run a recorded preflight for ADB readiness, battery, available storage and AndroidQF availability before lengthy acquisition steps.
 - Capture volatile system and network state.
 - Run AndroidQF.
 - Collect complementary ADB diagnostics and a bug report.
@@ -430,6 +431,16 @@ entity is marked `related`. The attribution is available in `summary.json`, time
 analysis match records, and the `confirmed_ioc_matches` CSV/Markdown/HTML table. Related entities
 are context for analyst review and should not be interpreted as proof that the related campaign
 or actor authored the matched artifact.
+
+Before a scan continues past device connection, DroidCustos writes
+`00_metadata/preflight.json` and a `preflight_finished` event. The record includes the exact ADB
+responses, parsed battery state, filesystem capacity, AndroidQF path and a scope-based duration
+estimate. A blocking condition stops the acquisition while retaining the case directory and its
+preflight record for review.
+
+DroidCustos does not silently redact or rewrite acquired forensic data. Sensitive evidence remains
+under the case access controls and is accompanied by custody events, hashes and provenance so an
+analyst can distinguish original output from derived interpretations.
 
 ## Re-analyze an existing case
 

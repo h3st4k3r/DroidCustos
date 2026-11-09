@@ -28,6 +28,7 @@ from .hashing import create_evidence_manifest, seal_read_only, verify_evidence_m
 from .heuristics import Finding, run_heuristics
 from .indicators import build_ioc_database, download_all_stix, stix_files, update_index, update_mvt_native
 from .plugins import CollectorResult, execute_plugins
+from .preflight import run_preflight
 from .profiles import AcquisitionProfile, resolve_profile
 from .reporting import generate_reports
 from .security_state import analyze_security_state
@@ -130,6 +131,24 @@ def run_scan(args) -> int:
     case.write_json("00_metadata/case.json", case_metadata)
     append_event(case.custody_log, "case_created", actor=args.operator, details=case_metadata)
     append_event(case.custody_log, "device_connected", actor=args.operator, details={"serial": device.serial, "state": device.state})
+
+    preflight = run_preflight(
+        args.adb,
+        device.serial,
+        case.root,
+        cache,
+        androidqf,
+        profile,
+        case.command_log,
+    )
+    case.write_json("00_metadata/preflight.json", preflight)
+    append_event(case.custody_log, "preflight_finished", actor=args.operator, details=preflight)
+    if not preflight["ready"]:
+        blocked = ", ".join(str(item) for item in preflight["blocking_checks"])
+        raise RuntimeError(f"Preflight blocked acquisition ({blocked}); case retained at {case.root}")
+    for check in preflight["checks"]:
+        if check["status"] == "WARNING":
+            warning(f"Preflight warning: {check['name']}: {check['detail']}")
 
     manifest, iocs = _cached_indicators(cache) if args.no_update else update_indicators(cache, case.command_log, _custom_ioc_path(args))
     case.write_json("00_metadata/ioc-manifest.json", manifest)
