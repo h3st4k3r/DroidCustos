@@ -15,6 +15,7 @@
 - Prevented in-place re-analysis of finally sealed cases and recorded explicit seal requests in custody history.
 - Added APK manifest provenance, binary-manifest status, aapt/aapt2 diagnostics and signing-lineage preservation.
 - Added CI JUnit reports, installed-wheel dependency checks and a build SBOM with wheel hashes.
+- Limited CI matrix parallelism to improve reliability on shared hosted runners.
 
 ## 0.3.2 - 2026-08-03
 
