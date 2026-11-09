@@ -10,11 +10,18 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
+from .archive_safety import UnsafeArchiveError
 from .commands import run_capture
 
 
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
 MAX_MANIFEST_BYTES = 8 * 1024 * 1024
+MAX_APK_MEMBERS = 10000
+MAX_APK_MEMBER_BYTES = 512 * 1024 * 1024
+MAX_APK_TOTAL_BYTES = 2 * 1024 * 1024 * 1024
+MAX_APK_COMPRESSION_RATIO = 2000
+MAX_TEXT_SCAN_BYTES = 8 * 1024 * 1024
+MAX_TEXT_ENTRY_BYTES = 2 * 1024 * 1024
 URL_RE = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
 DOMAIN_RE = re.compile(r"(?<![A-Za-z0-9_-])(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}(?![A-Za-z0-9_-])")
 IP_RE = re.compile(r"(?<![0-9A-Fa-f:.])(?:\d{1,3}\.){3}\d{1,3}(?![0-9.])")
@@ -49,6 +56,22 @@ def _entry_hashes(package: zipfile.ZipFile, names: list[str]) -> list[dict[str, 
                 digest.update(chunk)
         rows.append({"path": name, "size": info.file_size, "sha256": digest.hexdigest()})
     return rows
+
+
+def _validate_apk_entries(infos: list[zipfile.ZipInfo]) -> None:
+    """Reject APK ZIP metadata that could cause unbounded analysis."""
+    if len(infos) > MAX_APK_MEMBERS:
+        raise UnsafeArchiveError("APK contains too many ZIP members")
+    total = 0
+    for info in infos:
+        size = 0 if info.is_dir() else info.file_size
+        if size < 0 or size > MAX_APK_MEMBER_BYTES:
+            raise UnsafeArchiveError(f"APK member exceeds the analysis limit: {info.filename}")
+        total += size
+        if total > MAX_APK_TOTAL_BYTES:
+            raise UnsafeArchiveError("APK exceeds the total analysis size limit")
+        if not info.is_dir() and info.compress_size and size / info.compress_size > MAX_APK_COMPRESSION_RATIO:
+            raise UnsafeArchiveError(f"APK member compression ratio is too high: {info.filename}")
 
 
 def _manifest_attribute(element: ElementTree.Element, name: str) -> str:
@@ -161,7 +184,9 @@ def analyze_apk(apk: Path, output: Path | None = None) -> dict[str, object]:
     if not apk.is_file():
         raise FileNotFoundError(apk)
     with zipfile.ZipFile(apk) as package:
-        names = sorted(info.filename for info in package.infolist() if not info.is_dir())
+        infos = package.infolist()
+        _validate_apk_entries(infos)
+        names = sorted(info.filename for info in infos if not info.is_dir())
         manifest = {}
         if "AndroidManifest.xml" in names:
             info = package.getinfo("AndroidManifest.xml")
@@ -172,12 +197,18 @@ def analyze_apk(apk: Path, output: Path | None = None) -> dict[str, object]:
         signing_entries = [name for name in names if name.upper().startswith("META-INF/") and name.upper().endswith((".RSA", ".DSA", ".EC", ".SF", "MANIFEST.MF"))]
         text_entries = [name for name in names if name.endswith((".xml", ".json", ".txt", ".properties"))]
         text = ""
+        text_budget = MAX_TEXT_SCAN_BYTES
         for name in text_entries[:200]:
+            if text_budget <= 0:
+                break
             info = package.getinfo(name)
-            if info.file_size <= 2 * 1024 * 1024:
-                text += package.read(info).decode("utf-8", errors="ignore") + "\n"
+            if info.file_size <= MAX_TEXT_ENTRY_BYTES:
+                raw = package.read(info)[:text_budget]
+                text += raw.decode("utf-8", errors="ignore") + "\n"
+                text_budget -= len(raw)
         result: dict[str, object] = {
             "format": "droidcustos-apk-analysis-v1",
+            "analysis_status": "OK",
             "path": str(apk),
             "size": apk.stat().st_size,
             "sha256": _sha256_file(apk),
@@ -201,7 +232,19 @@ def analyze_apk(apk: Path, output: Path | None = None) -> dict[str, object]:
 
 def analyze_apk_tree(root: Path, output: Path | None = None) -> list[dict[str, object]]:
     """Analyze every APK below a working evidence root."""
-    results = [analyze_apk(path) for path in sorted(root.rglob("*.apk"))]
+    results: list[dict[str, object]] = []
+    for path in sorted(root.rglob("*.apk")):
+        try:
+            results.append(analyze_apk(path))
+        except (OSError, ValueError, zipfile.BadZipFile) as exc:
+            results.append(
+                {
+                    "format": "droidcustos-apk-analysis-v1",
+                    "analysis_status": "ERROR",
+                    "path": str(path),
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            )
     if output:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(results, indent=2, sort_keys=True) + "\n", encoding="utf-8")

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Hardened evidence-manifest verification against absolute paths, traversal entries and symlinks.
+- Added bounded APK ZIP inspection with member, compression-ratio, per-entry and total-size limits.
+- Preserved corrupt or unsafe APKs as explicit analysis errors instead of aborting the complete APK inventory.
+- Added regression tests for adversarial manifest paths and damaged APK inputs.
+- Made the no-isolation wheel build self-contained by declaring its setuptools and wheel tooling.
+
 ## 0.3.2 - 2026-08-03
 
 - Prepared a clean public-alpha source release with no case data, caches, virtual environments or build products.

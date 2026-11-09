@@ -108,6 +108,8 @@ See:
 - Hashes acquired APKs and files.
 - Extracts APK signing-certificate data when Android SDK tools are available.
 - Performs static APK analysis without executing or unpacking APK content into the host file system.
+- Applies member-count, decompression-ratio, per-entry and total-size limits while inspecting APK ZIP containers.
+- Keeps corrupt or rejected APKs as explicit analysis errors so one damaged artifact does not abort the complete case.
 - Records APK package metadata, permissions, components, exported actions, special capabilities, DEX/native hashes and passive network observables when available.
 - Runs MVT against AndroidQF and bug-report evidence.
 - Runs ALEAPP when installed and applicable.
@@ -120,6 +122,7 @@ See:
 - Records host/device time synchronization offset and uncertainty for timestamp interpretation.
 - Generates searchable offline HTML reports and complete CSV exports.
 - Creates and verifies SHA-256 evidence manifests.
+- Rejects tampered manifest paths, traversal entries and symlinked evidence during verification.
 - Creates optional Ed25519 case seals.
 - Exports and imports AES-256-GCM encrypted case archives.
 - Creates package and device baselines for later comparison.

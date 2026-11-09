@@ -12,6 +12,7 @@ import stat
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
+from pathlib import PureWindowsPath
 
 
 def sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
@@ -83,6 +84,31 @@ def create_evidence_manifest(
     return payload
 
 
+def _safe_manifest_path(case_root: Path, raw_path: object) -> tuple[Path | None, str | None]:
+    """Resolve one manifest path without allowing traversal or symlinks."""
+    text = str(raw_path or "")
+    relative = Path(text)
+    windows = PureWindowsPath(text)
+    if (
+        not text
+        or relative.is_absolute()
+        or windows.is_absolute()
+        or windows.drive
+        or ".." in relative.parts
+        or ".." in windows.parts
+    ):
+        return None, "unsafe-path"
+    unresolved = case_root / relative
+    if unresolved.is_symlink():
+        return None, "symlink"
+    resolved = unresolved.resolve()
+    try:
+        resolved.relative_to(case_root)
+    except ValueError:
+        return None, "outside-root"
+    return resolved, None
+
+
 def verify_evidence_manifest(json_manifest: Path, root: Path | None = None) -> dict[str, object]:
     """Handle verify evidence manifest operations."""
     if not json_manifest.is_file():
@@ -93,9 +119,17 @@ def verify_evidence_manifest(json_manifest: Path, root: Path | None = None) -> d
     mismatches: list[dict[str, object]] = []
     checked = 0
 
+    case_root = (root or Path(str(payload.get("root", "")))).resolve()
     for entry in payload.get("entries", []):
         checked += 1
-        path = case_root / str(entry["path"])
+        if not isinstance(entry, dict):
+            mismatches.append({"path": "<invalid-entry>", "reason": "invalid-entry"})
+            continue
+        path, path_error = _safe_manifest_path(case_root, entry.get("path"))
+        if path_error:
+            mismatches.append({"path": str(entry.get("path", "")), "reason": path_error})
+            continue
+        assert path is not None
         if not path.is_file():
             mismatches.append({"path": str(entry["path"]), "reason": "missing"})
             continue
