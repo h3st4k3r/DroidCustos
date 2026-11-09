@@ -155,6 +155,23 @@ def _parse_aapt_output(text: str) -> dict[str, object]:
     return result
 
 
+def _manifest_from_aapt(metadata: dict[str, object]) -> dict[str, object]:
+    """Build a conservative manifest view from aapt badging metadata."""
+    package = str(metadata.get("package", ""))
+    permissions = [str(value) for value in metadata.get("permissions", [])]
+    activities = [{"name": str(value), "exported": None, "permission": "", "actions": []} for value in metadata.get("launchable_activities", [])]
+    return {
+        "source": "aapt-badging",
+        "parse_status": "partial",
+        "package": package,
+        "permissions": sorted(set(permissions)),
+        "components": {"activities": activities, "services": [], "receivers": [], "providers": []},
+        "special_capabilities": [],
+        "version_code": str(metadata.get("version_code", "")),
+        "version_name": str(metadata.get("version_name", "")),
+    }
+
+
 def _signing_metadata(apk: Path) -> dict[str, object]:
     """Inspect APK signing schemes when apksigner is available."""
     apksigner = shutil.which("apksigner")
@@ -167,7 +184,17 @@ def _signing_metadata(apk: Path) -> dict[str, object]:
         match = re.search(rf"Verified using v{number} scheme \([^)]*\):\s*(true|false)", text, re.IGNORECASE)
         schemes[f"v{number}"] = match.group(1).lower() == "true" if match else None
     certificates = sorted(set(re.findall(r"certificate SHA-256 digest:\s*([A-Fa-f0-9]+)", text, re.IGNORECASE)))
-    return {"available": result.ok, **schemes, "certificates_sha256": [value.lower() for value in certificates], "history_sha256": [value.lower() for value in certificates], "raw": text[:10000]}
+    lineage = sorted(set(re.findall(r"certificate SHA-256 lineage:\s*([A-Fa-f0-9]+)", text, re.IGNORECASE)))
+    history = sorted({value.lower() for value in certificates + lineage})
+    return {
+        "available": result.ok,
+        "tool": Path(apksigner).name,
+        "returncode": result.returncode,
+        **schemes,
+        "certificates_sha256": [value.lower() for value in certificates],
+        "history_sha256": history,
+        "raw": text[:10000],
+    }
 
 
 def _extract_observables(text: str) -> dict[str, list[str]]:
@@ -188,10 +215,18 @@ def analyze_apk(apk: Path, output: Path | None = None) -> dict[str, object]:
         _validate_apk_entries(infos)
         names = sorted(info.filename for info in infos if not info.is_dir())
         manifest = {}
+        manifest_source = "unavailable"
+        manifest_status = "missing"
         if "AndroidManifest.xml" in names:
             info = package.getinfo("AndroidManifest.xml")
             if info.file_size <= MAX_MANIFEST_BYTES:
                 manifest = _parse_manifest_xml(package.read(info))
+                if manifest:
+                    manifest_source = "plaintext-xml"
+                    manifest_status = "parsed"
+                else:
+                    manifest_source = "binary-or-invalid-xml"
+                    manifest_status = "requires-aapt"
         dex_names = [name for name in names if re.fullmatch(r"classes(?:\d+)?\.dex", Path(name).name)]
         native_names = [name for name in names if name.startswith("lib/") and name.endswith(".so")]
         signing_entries = [name for name in names if name.upper().startswith("META-INF/") and name.upper().endswith((".RSA", ".DSA", ".EC", ".SF", "MANIFEST.MF"))]
@@ -214,6 +249,8 @@ def analyze_apk(apk: Path, output: Path | None = None) -> dict[str, object]:
             "sha256": _sha256_file(apk),
             "package": manifest.get("package", ""),
             "manifest": manifest,
+            "manifest_source": manifest_source,
+            "manifest_status": manifest_status,
             "dex": _entry_hashes(package, dex_names),
             "native_libraries": _entry_hashes(package, native_names),
             "abis": sorted({Path(name).parts[1] for name in native_names if len(Path(name).parts) > 2}),
@@ -223,7 +260,15 @@ def analyze_apk(apk: Path, output: Path | None = None) -> dict[str, object]:
         }
     aapt = shutil.which("aapt2") or shutil.which("aapt")
     if aapt:
-        result["aapt"] = _parse_aapt_output(run_capture([aapt, "dump", "badging", str(apk)], timeout=120).stdout)
+        aapt_result = run_capture([aapt, "dump", "badging", str(apk)], timeout=120)
+        aapt_metadata = _parse_aapt_output(aapt_result.stdout)
+        aapt_metadata.update({"tool": Path(aapt).name, "ok": aapt_result.ok, "returncode": aapt_result.returncode, "stderr": aapt_result.stderr[:10000]})
+        result["aapt"] = aapt_metadata
+        if not result["manifest"] and aapt_result.ok:
+            result["manifest"] = _manifest_from_aapt(aapt_metadata)
+            result["package"] = result["manifest"].get("package", "")
+            result["manifest_source"] = "aapt-badging"
+            result["manifest_status"] = "partial"
     if output:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")

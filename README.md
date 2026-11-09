@@ -289,8 +289,10 @@ The following machine-readable artifacts are generated when their source evidenc
 ```
 
 APK analysis is passive: DroidCustos reads ZIP metadata and available manifest/signing-tool output,
-calculates hashes and extracts observables, but does not execute APKs. Binary Android manifests are
-enriched when `aapt2` is available; the workflow remains usable when optional SDK tools are absent.
+calculates hashes and extracts observables, but does not execute APKs. Plain-text manifests are
+parsed directly. Binary Android manifests are reported as requiring `aapt2`/`aapt`; when available,
+the tool output is preserved with its executable name, return code and stderr, and conservative
+package, permission and launchable-activity metadata is added without overwriting the original APK.
 
 ## Acquisition profiles
 
@@ -636,6 +638,13 @@ Archives received from AndroidQF, ALEAPP or private-artifact workflows are extra
 symlink, file-type, member-count, compression-ratio and total-size checks. Unsafe archives are
 rejected before files are written outside the disposable working directory. Case export archives
 remain authenticated with AES-256-GCM.
+
+### Build verification
+
+The continuous-integration workflow runs the test matrix on supported Python versions and both
+Linux and macOS. Every matrix job uploads a JUnit test report even when its tests fail. The wheel
+job also runs `pip check`, performs an installed-wheel smoke test and publishes a small CycloneDX-
+style software bill of materials containing installed package versions and the wheel SHA-256.
 
 ## Integrated and associated tools
 

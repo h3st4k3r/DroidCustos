@@ -13,6 +13,8 @@
 - Added SHA-256 hash chaining to new custody events with tamper detection and legacy-log reporting.
 - Expanded Ed25519 case seals to cover all regular case files except the seal JSON and detached signature.
 - Prevented in-place re-analysis of finally sealed cases and recorded explicit seal requests in custody history.
+- Added APK manifest provenance, binary-manifest status, aapt/aapt2 diagnostics and signing-lineage preservation.
+- Added CI JUnit reports, installed-wheel dependency checks and a build SBOM with wheel hashes.
 
 ## 0.3.2 - 2026-08-03
 

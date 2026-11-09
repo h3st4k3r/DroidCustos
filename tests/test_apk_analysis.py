@@ -2,7 +2,7 @@ import io
 import zipfile
 from pathlib import Path
 
-from droidcustos.apk_analysis import analyze_apk, analyze_apk_tree
+from droidcustos.apk_analysis import _manifest_from_aapt, analyze_apk, analyze_apk_tree
 
 
 def test_static_apk_analysis_inventory(tmp_path: Path) -> None:
@@ -32,6 +32,8 @@ def test_static_apk_analysis_inventory(tmp_path: Path) -> None:
         package.writestr("assets/config.txt", "https://C2.Example/collect 203.0.113.7")
     result = analyze_apk(apk)
     assert result["package"] == "com.example.suspicious"
+    assert result["manifest_source"] == "plaintext-xml"
+    assert result["manifest_status"] == "parsed"
     assert len(result["dex"]) == 2
     assert result["abis"] == ["arm64-v8a"]
     assert result["manifest"]["debuggable"] is True
@@ -50,6 +52,35 @@ def test_apk_analysis_does_not_classify_url_as_malicious(tmp_path: Path) -> None
     result = analyze_apk(apk)
     assert result["observables"]["urls"] == ["https://example.org/documentation"]
     assert "malicious" not in result
+
+
+def test_binary_manifest_is_reported_without_inventing_metadata(tmp_path: Path) -> None:
+    """Report binary XML limitations while preserving the APK hash and evidence path."""
+    apk = tmp_path / "binary-manifest.apk"
+    with zipfile.ZipFile(apk, "w") as package:
+        package.writestr("AndroidManifest.xml", b"AXML\x00\x00not-plaintext")
+    result = analyze_apk(apk)
+    assert result["manifest"] == {}
+    assert result["manifest_source"] == "binary-or-invalid-xml"
+    assert result["manifest_status"] == "requires-aapt"
+    assert len(result["sha256"]) == 64
+
+
+def test_aapt_manifest_fallback_is_explicit_and_partial() -> None:
+    """Convert only the metadata aapt can prove when binary XML is unavailable."""
+    manifest = _manifest_from_aapt(
+        {
+            "package": "com.example.binary",
+            "permissions": ["android.permission.INTERNET"],
+            "launchable_activities": ["com.example.MainActivity"],
+            "version_code": "7",
+            "version_name": "1.2.3",
+        }
+    )
+    assert manifest["source"] == "aapt-badging"
+    assert manifest["parse_status"] == "partial"
+    assert manifest["package"] == "com.example.binary"
+    assert manifest["components"]["activities"][0]["name"] == "com.example.MainActivity"
 
 
 def test_apk_tree_keeps_corrupt_apk_as_an_error_record(tmp_path: Path) -> None:

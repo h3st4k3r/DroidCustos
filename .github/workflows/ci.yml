@@ -38,7 +38,15 @@ jobs:
         run: python -m compileall -q droidcustos tests
 
       - name: Run tests
-        run: python -m pytest
+        run: python -m pytest --junitxml=test-results.xml
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}
+          if-no-files-found: warn
+          path: test-results.xml
 
   wheel:
     name: Build and install wheel
@@ -69,6 +77,12 @@ jobs:
           .wheel-venv/bin/python -m pip install --disable-pip-version-check --upgrade pip
           .wheel-venv/bin/python -m pip install dist/*.whl
 
+      - name: Verify installed dependencies
+        run: .wheel-venv/bin/python -m pip check
+
+      - name: Generate software bill of materials
+        run: python tools/generate_sbom.py --output dist/droidcustos-sbom.json --wheel-dir dist
+
       - name: Smoke test installed wheel
         run: |
           .wheel-venv/bin/droidcustos --help
@@ -79,4 +93,4 @@ jobs:
         with:
           name: droidcustos-wheel
           if-no-files-found: error
-          path: dist/*.whl
+          path: dist/*
