@@ -75,6 +75,7 @@ class IOCExpression:
     node: object
     observables: tuple[Observable, ...]
     unsupported_reason: str | None = None
+    attribution: tuple[dict[str, str], ...] = ()
 
 
 class PatternSyntaxError(ValueError):
@@ -276,11 +277,98 @@ def _source_metadata(manifest: Mapping[str, object] | None) -> dict[str, dict[st
     return result
 
 
+_ATTRIBUTION_TYPES = {"malware", "campaign", "threat-actor", "tool", "infrastructure", "identity"}
+_RELATED_RELATIONSHIPS = {"attributed-to", "member-of", "part-of", "related-to", "targets", "uses"}
+
+
+def _stix_context(paths: Iterable[Path]) -> tuple[dict[str, dict[str, str]], list[dict[str, str]]]:
+    """Load attribution entities and relationships from STIX bundles."""
+    entities: dict[str, dict[str, str]] = {}
+    relationships: list[dict[str, str]] = []
+    for path in paths:
+        try:
+            bundle = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        for item in bundle.get("objects", []):
+            if not isinstance(item, Mapping):
+                continue
+            object_type = str(item.get("type", ""))
+            stix_id = str(item.get("id", ""))
+            if object_type in _ATTRIBUTION_TYPES and stix_id:
+                entities[stix_id] = {
+                    "stix_id": stix_id,
+                    "type": object_type,
+                    "name": str(item.get("name", "")),
+                }
+            elif object_type == "relationship":
+                relationships.append(
+                    {
+                        "source_ref": str(item.get("source_ref", "")),
+                        "target_ref": str(item.get("target_ref", "")),
+                        "relationship_type": str(item.get("relationship_type", "")),
+                    }
+                )
+    return entities, relationships
+
+
+def _resolve_attribution(
+    indicator_id: str,
+    entities: Mapping[str, Mapping[str, str]],
+    relationships: Iterable[Mapping[str, str]],
+) -> tuple[dict[str, str], ...]:
+    """Resolve direct and one-hop STIX attribution for an indicator."""
+    relationship_rows = list(relationships)
+    direct_targets: list[tuple[str, str]] = []
+    resolved: dict[tuple[str, str, str], dict[str, str]] = {}
+    for relationship in relationship_rows:
+        source_ref = str(relationship.get("source_ref", ""))
+        target_ref = str(relationship.get("target_ref", ""))
+        relationship_type = str(relationship.get("relationship_type", ""))
+        if source_ref != indicator_id or target_ref not in entities:
+            continue
+        entity = entities[target_ref]
+        direct_targets.append((target_ref, relationship_type))
+        key = (target_ref, relationship_type, "direct")
+        resolved[key] = {
+            "type": str(entity.get("type", "")),
+            "name": str(entity.get("name", "")),
+            "stix_id": target_ref,
+            "relationship": relationship_type,
+            "scope": "direct",
+        }
+    for source_ref, _ in direct_targets:
+        for relationship in relationship_rows:
+            if str(relationship.get("source_ref", "")) != source_ref:
+                continue
+            target_ref = str(relationship.get("target_ref", ""))
+            relationship_type = str(relationship.get("relationship_type", ""))
+            if target_ref not in entities or relationship_type not in _RELATED_RELATIONSHIPS:
+                continue
+            entity = entities[target_ref]
+            key = (target_ref, relationship_type, "related")
+            resolved[key] = {
+                "type": str(entity.get("type", "")),
+                "name": str(entity.get("name", "")),
+                "stix_id": target_ref,
+                "relationship": relationship_type,
+                "scope": "related",
+            }
+    return tuple(
+        sorted(
+            (item for item in resolved.values() if item["name"]),
+            key=lambda item: (item["scope"] != "direct", item["type"], item["name"], item["stix_id"]),
+        )
+    )
+
+
 def load_stix_expressions(paths: Iterable[Path], manifest: Mapping[str, object] | None = None) -> list[IOCExpression]:
     """Load complete indicator expressions from STIX bundles."""
     from .indicators import iter_indicator_records
 
+    paths = list(paths)
     sources = _source_metadata(manifest)
+    entities, relationships = _stix_context(paths)
     grouped: dict[tuple[str, str, str, str], IOCExpression] = {}
     for record in iter_indicator_records(paths, manifest):
         key = (record.stix_id, record.pattern, record.source_name, record.source_url)
@@ -302,6 +390,7 @@ def load_stix_expressions(paths: Iterable[Path], manifest: Mapping[str, object] 
             node=node,
             observables=observables,
             unsupported_reason=unsupported,
+            attribution=_resolve_attribution(record.stix_id, entities, relationships),
         )
     return list(grouped.values())
 
@@ -370,6 +459,7 @@ def match_expressions(
                 "source_url": expression.source_url,
                 "confidence": expression.confidence,
                 "labels": list(expression.labels),
+                "attribution": [dict(item) for item in expression.attribution],
                 "matched_observables": [
                     {"type": item.normalized_type, "value": item.value} for item in used
                 ],
@@ -397,10 +487,25 @@ def load_database_expressions(database: Path) -> list[IOCExpression]:
     connection.row_factory = sqlite3.Row
     expressions: list[IOCExpression] = []
     try:
+        try:
+            entities = {
+                str(row["stix_id"]): {
+                    "stix_id": str(row["stix_id"]),
+                    "type": str(row["type"]),
+                    "name": str(row["name"] or ""),
+                }
+                for row in connection.execute("SELECT stix_id, type, name FROM entities").fetchall()
+            }
+            relationships = [dict(row) for row in connection.execute(
+                "SELECT source_ref, target_ref, relationship_type FROM relationships"
+            ).fetchall()]
+        except sqlite3.OperationalError:
+            entities, relationships = {}, []
         rows = connection.execute(
             """
             SELECT stix_id, pattern, confidence, valid_from, valid_until, revoked,
-                   labels, name, description, sources.name AS source_name, sources.url AS source_url
+                   labels, indicators.name, indicators.description,
+                   sources.name AS source_name, sources.url AS source_url
             FROM indicators
             LEFT JOIN sources ON sources.id = indicators.source_id
             GROUP BY stix_id, pattern, source_id
@@ -428,6 +533,7 @@ def load_database_expressions(database: Path) -> list[IOCExpression]:
                     node=node,
                     observables=observables,
                     unsupported_reason=unsupported,
+                    attribution=_resolve_attribution(str(row["stix_id"] or ""), entities, relationships),
                 )
             )
     finally:

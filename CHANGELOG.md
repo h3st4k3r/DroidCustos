@@ -7,6 +7,8 @@
 - Preserved corrupt or unsafe APKs as explicit analysis errors instead of aborting the complete APK inventory.
 - Added regression tests for adversarial manifest paths and damaged APK inputs.
 - Made the no-isolation wheel build self-contained by declaring its setuptools and wheel tooling.
+- Added STIX malware, campaign, threat-actor and tool attribution to complete IOC matches, including direct and one-hop related relationships.
+- Added attribution to JSON findings and the confirmed IOC CSV, Markdown and HTML report table.
 
 ## 0.3.2 - 2026-08-03
 

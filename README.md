@@ -60,6 +60,7 @@ A normal run can:
 - Build a normalized multi-user package inventory.
 - Correlate packages, certificates, hashes and network observables with STIX indicators.
 - Evaluate complete STIX boolean expressions without splitting related observables into independent matches.
+- Preserve STIX attribution for matched indicators, including directly indicated malware and one-hop related campaigns, threat actors and tools.
 - Separate confirmed IOC matches from heuristic alerts.
 - Inspect acquired APKs statically, including hashes, DEX/native libraries, signing entries, manifest metadata and suspicious capabilities.
 - Record verified-boot, SELinux, patch-level, ADB, root, owner/profile and special-access evidence as a separate security posture.
@@ -422,6 +423,14 @@ kept as expressions: an `AND` expression only matches when all of its terms are 
 same evidence scope. Unsupported pattern syntax is reported for review instead of being silently
 treated as a match.
 
+When a STIX bundle or normalized `ioc.db` contains relationships from an indicator to a named
+malware, campaign, threat actor or tool, each confirmed match retains that attribution. Direct
+relationships are marked `direct`; a single supported relationship hop from a directly indicated
+entity is marked `related`. The attribution is available in `summary.json`, timeline and extended
+analysis match records, and the `confirmed_ioc_matches` CSV/Markdown/HTML table. Related entities
+are context for analyst review and should not be interpreted as proof that the related campaign
+or actor authored the matched artifact.
+
 ## Re-analyze an existing case
 
 Use this after updating DroidCustos or its IOC sources:
@@ -499,6 +508,10 @@ A confirmed IOC requires at least one of the following:
 For compound indicators, all required terms must be observed in the same evidence scope. A match
 is also checked against STIX `valid_from`, `valid_until` and `revoked` state. This prevents an
 expired, revoked or partially observed expression from being promoted to a confirmed match.
+
+Reports preserve the associated STIX malware/campaign attribution when the source provides it.
+The confirmed IOC table separates the indicator name from `Attribution` and labels each entity as
+`direct` or `related` so the evidence strength remains visible.
 
 MVT heuristics, unusual permissions, crashes, old security patches and package-state anomalies are reported separately for analyst review.
 
